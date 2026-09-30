@@ -9,6 +9,7 @@ import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.project.ProjectPackageTarget
 import com.aliothmoon.maafw.update.ProjectUpdateManager
 import com.aliothmoon.maafw.SystemApkInstaller
+import com.aliothmoon.maafw.update.AndroidAbi
 import com.aliothmoon.maafw.update.DownloadedUpdate
 import com.aliothmoon.maafw.update.OkHttpUpdateDownloader
 import com.aliothmoon.maafw.update.ResolvedUpdate
@@ -624,7 +625,7 @@ class SettingsViewModelTest {
             },
             projectUpdates = projectUpdates,
             currentVersion = "1.0.0",
-            supportedAbis = listOf("arm64-v8a"),
+            abi = AndroidAbi.ARM64,
         )
     }
 }
