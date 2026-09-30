@@ -43,6 +43,21 @@ class PiInstallerTest {
         "resource/base/pipeline/x.json" to "{}",
     )
 
+    @Test
+    fun `APK upgrades retain independently updated MAH and repair retains user state`() {
+        val base = temp.newFolder("managed")
+        val managed = files + (ProjectPackageInstaller.STATE to "{}")
+        val root = installer(base, MapPiPackage(managed), 11).ensureInstalled()
+        File(root, "tasks/a.json").writeText("updated online")
+        File(root, "config").mkdirs()
+        File(root, "config/config.json").writeText("user progress")
+        installer(base, MapPiPackage(managed), 12).ensureInstalled()
+        assertEquals("updated online", File(root, "tasks/a.json").readText())
+        installer(base, MapPiPackage(managed), 12).reinstall()
+        assertEquals("{}", File(root, "tasks/a.json").readText())
+        assertEquals("user progress", File(root, "config/config.json").readText())
+    }
+
     private fun installer(base: File, pkg: PiPackage, versionCode: Int): PiInstaller {
         every { AppPaths.ROOT } returns base
         return PiInstaller(pkg, versionCode)

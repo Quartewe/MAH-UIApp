@@ -11,6 +11,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,6 +51,7 @@ fun OptionEditorList(
     onSetOption: (String, OptionValue) -> Unit,
     modifier: Modifier = Modifier,
     carded: Boolean = false,
+    onSetBinding: (String, Boolean) -> Unit = LocalBindingChange.current,
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -57,11 +60,13 @@ fun OptionEditorList(
         ),
     ) {
         options.forEach { option ->
+          androidx.compose.runtime.CompositionLocalProvider(LocalBindingChange provides onSetBinding) {
             if (carded) {
                 CardedOptionItem(option, locked, onSetOption)
             } else {
                 OptionEditorItem(option, locked, onSetOption)
             }
+          }
         }
     }
 }
@@ -82,12 +87,14 @@ private fun CardedOptionItem(
             null
         },
     ) {
+        BindingControl(option, locked, LocalBindingChange.current)
         when (option.kind) {
             OptionKind.Select, OptionKind.Switch ->
                 if (switchCases == null) ChoiceChipFlow(option, locked, onSetOption)
 
             OptionKind.Checkbox -> CheckboxCases(option, locked, onSetOption)
             OptionKind.Input -> InputFields(option, locked, onSetOption)
+            OptionKind.Show -> ShowOption(option)
         }
         OptionDescriptionAndChildren(option, locked, onSetOption)
     }
@@ -103,11 +110,13 @@ private fun OptionEditorItem(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
     ) {
+        BindingControl(option, locked, LocalBindingChange.current)
         when (option.kind) {
             OptionKind.Select -> SelectEditor(option, locked, onSetOption)
             OptionKind.Switch -> SwitchEditor(option, locked, onSetOption)
             OptionKind.Checkbox -> CheckboxEditor(option, locked, onSetOption)
             OptionKind.Input -> InputEditor(option, locked, onSetOption)
+            OptionKind.Show -> ShowOption(option)
         }
         OptionDescriptionAndChildren(option, locked, onSetOption)
     }
@@ -319,8 +328,13 @@ private fun InputFields(
     Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm)) {
         option.inputs.forEach { field ->
             // 仅合法候选立即提交；UI 先拒，Builder 再验
-            var text by remember(option.name, field.name, field.value) { mutableStateOf(field.value) }
-            val valid = validateInputCandidate(field.pipelineType, field.verify, text)
+            var text by remember(option.name, field.name, option.editScope) { mutableStateOf(field.value) }
+            var focused by remember { mutableStateOf(false) }
+            // DataStore writes are asynchronous; an older echo must not replace an active draft.
+            LaunchedEffect(field.value, focused) {
+                if (!focused) text = field.value
+            }
+            val valid = validateInputCandidate(field.pipelineType, field.verify, text, field.allowEmpty)
             val supporting: String? = if (valid) {
                 field.description
             } else {
@@ -330,7 +344,7 @@ private fun InputFields(
                 value = text,
                 onValueChange = { candidate ->
                     text = candidate
-                    if (validateInputCandidate(field.pipelineType, field.verify, candidate)) {
+                    if (validateInputCandidate(field.pipelineType, field.verify, candidate, field.allowEmpty)) {
                         val values = option.inputs.associate {
                             it.name to (if (it.name == field.name) candidate else it.value)
                         }
@@ -346,7 +360,7 @@ private fun InputFields(
                 singleLine = true,
                 visualTransformation = field.visualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = field.keyboardType()),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused },
             )
         }
     }

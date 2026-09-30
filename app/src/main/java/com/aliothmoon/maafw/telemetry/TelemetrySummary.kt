@@ -39,6 +39,7 @@ object TelemetrySummary {
         val value = values[optionName]
 
         val selected = when (option) {
+            is OptionDefinition.Show -> return
             is OptionDefinition.Choice -> {
                 val case = (value as? OptionValue.SingleCase)?.case
                     ?.takeIf { s -> option.cases.any { it.name == s } }

@@ -48,6 +48,25 @@ class SettingsViewModelTest {
 
     private val dispatcher = UnconfinedTestDispatcher()
 
+    @Test
+    fun `startup and manual APK checks both use software github`() = runTest {
+        val repositories = mutableListOf<String?>()
+        val model = viewModel(
+            service = mockk {
+                coEvery { check(any()) } coAnswers {
+                    repositories += firstArg<UpdateCheckRequest>().githubRepository
+                    UpdateCheckResult.UpToDate(UpdateSource.GITHUB, "1.0.0")
+                }
+            },
+            settings = FakeAppSettingsGateway().also { it.setAutoCheckUpdate(true) },
+            metadata = ProjectMetadata(githubRepository = "owner/project", softwareRepository = "owner/android-app"),
+        )
+        advanceUntilIdle()
+        model.onIntent(SettingsIntent.CheckUpdate)
+        advanceUntilIdle()
+        assertEquals(listOf("owner/android-app", "owner/android-app"), repositories)
+    }
+
     @Before
     fun setUp() {
         Dispatchers.setMain(dispatcher)
@@ -255,7 +274,7 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `startup check failure pops error dialog`() = runTest {
+    fun `startup check failure does not block the first screen`() = runTest {
         val viewModel = viewModel(
             service = mockk {
                 coEvery { check(any()) } returns
@@ -266,7 +285,7 @@ class SettingsViewModelTest {
         advanceUntilIdle()
 
         val panel = latestPanel(viewModel)
-        assertNotNull(panel.errorPrompt)
+        assertNull(panel.errorPrompt)
         assertNull(panel.updatePrompt)
     }
 
@@ -481,6 +500,7 @@ class SettingsViewModelTest {
             )
         },
         settings: AppSettingsGateway = FakeAppSettingsGateway(),
+        metadata: ProjectMetadata = ProjectMetadata(githubRepository = "owner/repo", mirrorchyanRid = "mirror-rid"),
     ): SettingsViewModel {
         val definition = ProjectDefinition(
             name = "demo",
@@ -491,10 +511,7 @@ class SettingsViewModelTest {
             groups = emptyList(),
             options = emptyMap(),
             templates = emptyList(),
-            metadata = ProjectMetadata(
-                githubRepository = "owner/repo",
-                mirrorchyanRid = "mirror-rid",
-            ),
+            metadata = metadata,
         )
         return SettingsViewModel(
             permissionGateway = FakePermissionGateway(),

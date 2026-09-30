@@ -80,7 +80,7 @@ class SettingsViewModel(
                             channel = appSettings.updateChannel.value,
                             abi = abi,
                             mirrorchyanRid = mirrorchyanRid(metadata),
-                            githubRepository = metadata?.githubRepository,
+                            githubRepository = metadata?.softwareRepository ?: metadata?.githubRepository,
                         ),
                     )
                 }
@@ -195,7 +195,7 @@ class SettingsViewModel(
                 channel = appSettings.updateChannel.value,
                 abi = abi,
                 mirrorchyanRid = mirrorchyanRid(metadata),
-                githubRepository = metadata.githubRepository,
+                githubRepository = metadata.softwareRepository ?: metadata.githubRepository,
             ),
         )
         val available = result as? UpdateCheckResult.UpdateAvailable
@@ -203,7 +203,7 @@ class SettingsViewModel(
             Timber.tag("UpdateCheck")
                 .w("startup check found no update: %s", result::class.simpleName)
             updateOperation.update {
-                it.copy(checking = false, errorPrompt = result.message()?.let(UpdateErrorPrompt::check))
+                it.copy(checking = false)
             }
             return
         }
@@ -229,7 +229,7 @@ class SettingsViewModel(
                 channel = appSettings.updateChannel.value,
                 abi = abi,
                 mirrorchyanRid = mirrorchyanRid(metadata),
-                githubRepository = metadata?.githubRepository,
+                githubRepository = metadata?.softwareRepository ?: metadata?.githubRepository,
             ),
         )
         // 错误与更新走同一种呈现（弹窗），二者天然互斥：失败不可能同时是 UpdateAvailable
@@ -294,7 +294,7 @@ class SettingsViewModel(
                     currentVersion = currentVersion,
                     mirrorchyanRid = mirrorchyanRid(metadata),
                     mirrorchyanCdk = cdk.takeIf(String::isNotBlank),
-                    githubRepository = metadata?.githubRepository,
+                    githubRepository = metadata?.softwareRepository ?: metadata?.githubRepository,
                 ),
             )) {
                 is UpdateResolveResult.Resolved -> resolved.update

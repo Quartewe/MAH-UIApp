@@ -16,6 +16,8 @@ import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -41,6 +43,9 @@ import com.aliothmoon.maafw.ui.components.MaaMarkdown
 import com.aliothmoon.maafw.ui.components.MaaPiIcon
 import com.aliothmoon.maafw.ui.components.MaaSwitch
 import com.aliothmoon.maafw.ui.components.maaClickable
+import com.aliothmoon.maafw.ui.options.BindingControl
+import com.aliothmoon.maafw.ui.options.LocalBindingChange
+import com.aliothmoon.maafw.ui.options.ShowOption
 import com.aliothmoon.maafw.ui.options.keyboardType
 import com.aliothmoon.maafw.ui.options.visualTransformation
 
@@ -53,13 +58,16 @@ internal fun OverlayOptionEditorList(
     locked: Boolean,
     onSetOption: (String, OptionValue) -> Unit,
     modifier: Modifier = Modifier,
+    onSetBinding: (String, Boolean) -> Unit = LocalBindingChange.current,
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
     ) {
         options.forEach { option ->
-            OverlayOptionItem(option, locked, onSetOption)
+            androidx.compose.runtime.CompositionLocalProvider(LocalBindingChange provides onSetBinding) {
+                OverlayOptionItem(option, locked, onSetOption)
+            }
         }
     }
 }
@@ -74,11 +82,13 @@ private fun OverlayOptionItem(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xxs),
     ) {
+        BindingControl(option, locked, LocalBindingChange.current)
         when (option.kind) {
             OptionKind.Select -> OverlaySelectEditor(option, locked, onSetOption)
             OptionKind.Switch -> OverlaySwitchEditor(option, locked, onSetOption)
             OptionKind.Checkbox -> OverlayCheckboxCasesEditor(option, locked, onSetOption)
             OptionKind.Input -> OverlayInputEditor(option, locked, onSetOption)
+            OptionKind.Show -> ShowOption(option)
         }
         option.description?.let { OverlayDescription(it) }
         val children = option.activeCases.flatMap { it.children }
@@ -217,8 +227,13 @@ private fun OverlayInputEditor(
     Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xxs)) {
         OverlayOptionLabel(option)
         option.inputs.forEach { field ->
-            var text by remember(option.name, field.name, field.value) { mutableStateOf(field.value) }
-            val valid = validateInputCandidate(field.pipelineType, field.verify, text)
+            var text by remember(option.name, field.name, option.editScope) { mutableStateOf(field.value) }
+            var focused by remember { mutableStateOf(false) }
+            // DataStore writes are asynchronous; an older echo must not replace an active draft.
+            LaunchedEffect(field.value, focused) {
+                if (!focused) text = field.value
+            }
+            val valid = validateInputCandidate(field.pipelineType, field.verify, text, field.allowEmpty)
             val supporting: String? = if (valid) {
                 field.description
             } else {
@@ -228,7 +243,7 @@ private fun OverlayInputEditor(
                 value = text,
                 onValueChange = { candidate ->
                     text = candidate
-                    if (validateInputCandidate(field.pipelineType, field.verify, candidate)) {
+                    if (validateInputCandidate(field.pipelineType, field.verify, candidate, field.allowEmpty)) {
                         val values = option.inputs.associate {
                             it.name to (if (it.name == field.name) candidate else it.value)
                         }
@@ -239,7 +254,7 @@ private fun OverlayInputEditor(
                 enabled = !locked,
                 visualTransformation = field.visualTransformation(),
                 keyboardType = field.keyboardType(),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused },
             )
             supporting?.let {
                 Text(

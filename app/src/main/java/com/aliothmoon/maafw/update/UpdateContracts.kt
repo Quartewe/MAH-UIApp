@@ -124,6 +124,7 @@ data class ResolvedUpdate(
     val version: String,
     val downloadUrl: String,
     val sha256: String?,
+    val fileExtension: String = "apk",
 )
 
 sealed interface UpdateResolveResult {

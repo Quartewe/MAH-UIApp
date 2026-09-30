@@ -1,0 +1,1358 @@
+{
+    "interface_version": 2,
+    "languages": {
+        "zh_cn": "resource/base/interface_zh.json",
+        "en_us": "resource/resource_en/interface_en.json",
+        "ja_jp": "resource/resource_jp/interface_jp.json",
+        "zh_tw": "resource/resource_tw/interface_tw.json"
+    },
+    "name": "MAH",
+    "icon": "icon.png",
+    "mirrorchyan_rid": "mah",
+    "mirrorchyan_multiplatform": true,
+    "github": "https://github.com/Quartewe/MAH",
+    "software_github": "https://github.com/Quartewe/MAH",
+    "resource_github": "https://github.com/quartawa/mah_res",
+    "version": "v1.0.1",
+    "contact": "$contact_info",
+    "license": "MIT",
+    "welcome": "$welcome",
+    "description": "$welcome_description",
+    "agent": {
+        "child_exec": "python",
+        "child_args": [
+            "../agent/main.py"
+        ],
+        "identifier": "MAH"
+    },
+    "controller": [
+        {
+            "name": "Android",
+            "description": "Connect to Android devices via ADB",
+            "type": "Adb",
+            "display_short_side": 720,
+            "display_raw": false
+        }
+    ],
+    "resource": [
+        {
+            "name": "Official_CN",
+            "label": "Official CN",
+            "description": "简中(CHS)",
+            "path": [
+                "resource/base"
+            ],
+            "controller": [
+                "Android"
+            ]
+        },
+        {
+            "name": "Official_EN",
+            "label": "Official EN",
+            "description": "English (ENG)",
+            "path": [
+                "resource/base",
+                "resource/resource_en"
+            ],
+            "controller": [
+                "Android"
+            ]
+        },
+        {
+            "name": "Official_TW",
+            "label": "Official TW",
+            "description": "繁体中文 (CHT)",
+            "path": [
+                "resource/base",
+                "resource/resource_tw"
+            ],
+            "controller": [
+                "Android"
+            ]
+        },
+        {
+            "name": "Official_JP",
+            "label": "Official JP",
+            "description": "日本語 (JPN)",
+            "path": [
+                "resource/base",
+                "resource/resource_jp"
+            ],
+            "controller": [
+                "Android"
+            ]
+        }
+    ],
+    "task": [
+        {
+            "name": "启动游戏",
+            "label": "$start_game",
+            "entry": "Startup.Entry",
+            "default_check": true,
+            "description": "$start_game_description"
+        },
+        {
+            "name": "地城作战",
+            "label": "$dungeon_combat",
+            "default_check": true,
+            "description": "$dungeon_combat_description",
+            "entry": "Dungeon.Entry",
+            "option": [
+                "choose_stage_dungeon",
+                "play_times",
+                "use_DP_potion",
+                "select_team",
+                "select_support_fast",
+                "json_load"
+            ]
+        },
+        {
+            "name": "体力作战",
+            "label": "$AP_combat",
+            "default_check": true,
+            "description": "$AP_combat_description",
+            "entry": "Combat.Entry",
+            "option": [
+                "choose_stage_AP",
+                "play_times",
+                "use_AP_potion",
+                "select_team",
+                "select_support_fast",
+                "json_load"
+            ]
+        },
+        {
+            "name": "检查任务进度",
+            "label": "$check_task_progress",
+            "entry": "CheckWeeklyMissions.Entry",
+            "default_check": true,
+            "description": "$check_task_progress_description",
+            "option": [
+                "show_progress"
+            ]
+        },
+        {
+            "name": "领取奖励",
+            "label": "$claim_rewards",
+            "default_check": true,
+            "description": "$claim_rewards_description",
+            "entry": "Reward.Entry"
+        }
+    ],
+    "option": {
+        "show_progress": {
+            "type": "show",
+            "label": "$current_progress",
+            "description": "$current_progress_description",
+            "shows": [
+                {
+                    "name": "当前进度",
+                    "label": "$current_progress_show",
+                    "description": "$current_progress_show_description",
+                    "path": "$current_progress_show_path",
+                    "json_path": "MAH.weekly_missions",
+                    "mode": "auto"
+                }
+            ]
+        },
+        "choose_stage_dungeon": {
+            "type": "select",
+            "label": "$select_stage",
+            "description": "$select_stage_description",
+            "cases": [
+                {
+                    "name": "黄金洞窟?",
+                    "label": "$golden_dungeon",
+                    "description": "$golden_dungeon_description",
+                    "pipeline_override": {
+                        "Dungeon.Change2": {
+                            "next": "Dungeon.Gold.Entry"
+                        },
+                        "Global.AutoCombat.BacktoEntry": {
+                            "next": "Dungeon.Gold.Entry"
+                        }
+                    }
+                },
+                {
+                    "name": "神宿学园旧校舍",
+                    "label": "$shinjuku_school",
+                    "description": "$shinjuku_school_description",
+                    "pipeline_override": {
+                        "Dungeon.Change2": {
+                            "next": "Dungeon.Shinjuku.Entry"
+                        },
+                        "Global.AutoCombat.BacktoEntry": {
+                            "next": "Dungeon.Shinjuku.Entry"
+                        }
+                    }
+                },
+                {
+                    "name": "池袋地下大迷宫",
+                    "label": "$ikebukuro_dungeon",
+                    "description": "$ikebukuro_dungeon_description",
+                    "pipeline_override": {
+                        "Dungeon.Change2": {
+                            "next": "Dungeon.Ikebukuro.Entry"
+                        },
+                        "Global.AutoCombat.BacktoEntry": {
+                            "next": "Dungeon.Ikebukuro.Entry"
+                        }
+                    }
+                },
+                {
+                    "name": "青山陵园地下墓地",
+                    "label": "$aoyama_cemetery",
+                    "description": "$aoyama_cemetery_description",
+                    "pipeline_override": {
+                        "Dungeon.Change2": {
+                            "next": "Dungeon.Aoyama.Entry"
+                        },
+                        "Global.AutoCombat.BacktoEntry": {
+                            "next": "Dungeon.Aoyama.Entry"
+                        }
+                    }
+                },
+                {
+                    "name": "五色结界地下灵场",
+                    "label": "$barrier_temple",
+                    "description": "$barrier_temple_description",
+                    "pipeline_override": {
+                        "Dungeon.Change2": {
+                            "next": "Dungeon.Barrier.Entry"
+                        },
+                        "Global.AutoCombat.BacktoEntry": {
+                            "next": "Dungeon.Barrier.Entry"
+                        }
+                    }
+                },
+                {
+                    "name": "自定义地城",
+                    "label": "$custom_stage",
+                    "description": "$custom_stage_description",
+                    "option": [
+                        "custom_stage_dungeon"
+                    ]
+                },
+                {
+                    "name": "进入当前地城作战",
+                    "label": "$current_stage",
+                    "description": "$current_stage_description",
+                    "option": [
+                        "use_formation"
+                    ],
+                    "pipeline_override": {
+                        "Dungeon.Entry": {
+                            "next": "Global.AutoCombat.Start"
+                        }
+                    }
+                }
+            ]
+        },
+        "custom_stage_dungeon": {
+            "type": "input",
+            "label": "$custom_stage",
+            "description": "$custom_stage_description",
+            "inputs": [
+                {
+                    "name": "自定义关卡",
+                    "label": "$custom_stage_input",
+                    "description": "$custom_stage_input_description",
+                    "default": "",
+                    "pipeline_type": "string"
+                },
+                {
+                    "name": "地城难度",
+                    "label": "$difficulty",
+                    "description": "$difficulty_description",
+                    "default": "",
+                    "pipeline_type": "string"
+                }
+            ],
+            "pipeline_override": {
+                "Dungeon.Change2": {
+                    "next": "Dungeon.Activity.Entry"
+                },
+                "Global.AutoCombat.BacktoEntry": {
+                    "next": "Dungeon.Activity.Entry"
+                },
+                "Dungeon.Activity.Choice": {
+                    "recognition": {
+                        "param": {
+                            "expected": "{自定义关卡}"
+                        }
+                    }
+                },
+                "Dungeon.Episode": {
+                    "recognition": {
+                        "param": {
+                            "expected": "{地城难度}"
+                        }
+                    }
+                }
+            }
+        },
+        "play_times": {
+            "type": "input",
+            "label": "$play_times",
+            "description": "$play_times_description",
+            "binding": [
+                "choose_stage_dungeon",
+                "choose_stage_AP"
+            ],
+            "inputs": [
+                {
+                    "name": "挑战次数",
+                    "label": "$play_times_input",
+                    "description": "$play_times_input_description",
+                    "default": "999",
+                    "pipeline_type": "int",
+                    "verify": "^(0|[1-9]\\d*)$"
+                }
+            ],
+            "pipeline_override": {
+                "Global.AutoCombat.Count": {
+                    "action": {
+                        "param": {
+                            "custom_action_param": "{挑战次数}"
+                        }
+                    }
+                }
+            }
+        },
+        "use_AP_potion": {
+            "type": "input",
+            "label": "$use_AP_potion",
+            "description": "$use_AP_potion_description",
+            "binding": [
+                "choose_stage_AP"
+            ],
+            "inputs": [
+                {
+                    "name": "全体力",
+                    "label": "$all_stamina",
+                    "description": "$all_stamina_description",
+                    "default": "0",
+                    "pipeline_type": "int",
+                    "verify": "^(0|[1-9]\\d*)$"
+                },
+                {
+                    "name": "半体力",
+                    "label": "$half_stamina",
+                    "description": "$half_stamina_description",
+                    "default": "0",
+                    "pipeline_type": "int",
+                    "verify": "^(0|[1-9]\\d*)$"
+                },
+                {
+                    "name": "小体力",
+                    "label": "$mini_stamina",
+                    "description": "$mini_stamina_description",
+                    "default": "0",
+                    "pipeline_type": "int",
+                    "verify": "^(0|[1-9]\\d*)$"
+                }
+            ],
+            "pipeline_override": {
+                "Global.AutoCombat.PreDrink": {
+                    "action": {
+                        "param": {
+                            "custom_action_param": {
+                                "All": "{全体力}",
+                                "Half": "{半体力}",
+                                "Mini": "{小体力}"
+                            }
+                        }
+                    }
+                },
+                "Global.AutoCombat.Drink1": {
+                    "action": {
+                        "param": {
+                            "custom_action_param": {
+                                "All": "{全体力}",
+                                "Half": "{半体力}",
+                                "Mini": "{小体力}"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "use_DP_potion": {
+            "type": "input",
+            "label": "$use_DP_potion",
+            "description": "$use_DP_potion_description",
+            "binding": [
+                "choose_stage_dungeon"
+            ],
+            "inputs": [
+                {
+                    "name": "DP",
+                    "label": "$dp_potion",
+                    "description": "$dp_potion_description",
+                    "default": "0",
+                    "pipeline_type": "int",
+                    "verify": "^(0|[1-9]\\d*)$"
+                }
+            ],
+            "pipeline_override": {
+                "Global.AutoCombat.PreDrink": {
+                    "action": {
+                        "param": {
+                            "custom_action_param": {
+                                "Ranpoil": "{DP}"
+                            }
+                        }
+                    }
+                },
+                "Global.AutoCombat.Drink1": {
+                    "action": {
+                        "param": {
+                            "custom_action_param": {
+                                "Ranpoil": "{DP}"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "choose_stage_AP": {
+            "type": "select",
+            "label": "$select_stage",
+            "description": "$select_stage_description",
+            "cases": [
+                {
+                    "name": "活动关卡",
+                    "label": "$activity_stage",
+                    "description": "$activity_stage_description",
+                    "option": [
+                        "custom_stage_Activity"
+                    ]
+                },
+                {
+                    "name": "进入当前作战",
+                    "label": "$current_stage",
+                    "description": "$current_stage_description",
+                    "option": [
+                        "use_formation"
+                    ],
+                    "pipeline_override": {
+                        "Combat.Entry": {
+                            "next": "Global.AutoCombat.Start"
+                        }
+                    }
+                },
+                {
+                    "name": "14章ATK花本",
+                    "label": "$14_atk",
+                    "description": "$14_atk_description",
+                    "pipeline_override": {
+                        "Combat.Entry": {
+                            "next": "Flower.Entry"
+                        },
+                        "Global.AutoCombat.BacktoEntry": {
+                            "next": "Flower.Entry"
+                        },
+                        "Flower.Go1": {
+                            "next": "Flower.Select.ATK"
+                        }
+                    }
+                },
+                {
+                    "name": "14章DEF花本",
+                    "label": "$14_def",
+                    "description": "$14_def_description",
+                    "pipeline_override": {
+                        "Combat.Entry": {
+                            "next": "Flower.Entry"
+                        },
+                        "Global.AutoCombat.BacktoEntry": {
+                            "next": "Flower.Entry"
+                        },
+                        "Flower.Go1": {
+                            "next": "Flower.Select.DEF"
+                        }
+                    }
+                },
+                {
+                    "name": "金币n3",
+                    "label": "$coin_n3",
+                    "description": "$coin_n3_description",
+                    "pipeline_override": {
+                        "Combat.Entry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "Global.AutoCombat.BacktoEntry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "DailyRes.Go1": {
+                            "next": "DailyRes.Coin.Entry"
+                        }
+                    }
+                },
+                {
+                    "name": "经验n3",
+                    "label": "$exp_n3",
+                    "description": "$exp_n3_description",
+                    "pipeline_override": {
+                        "Combat.Entry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "Global.AutoCombat.BacktoEntry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "DailyRes.Go1": {
+                            "next": "DailyRes.Exp.Entry"
+                        }
+                    }
+                },
+                {
+                    "name": "技能n3",
+                    "label": "$skill_n3",
+                    "description": "$skill_n3_description",
+                    "pipeline_override": {
+                        "Combat.Entry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "Global.AutoCombat.BacktoEntry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "DailyRes.Go1": {
+                            "next": "DailyRes.Skill.Entry"
+                        }
+                    }
+                },
+                {
+                    "name": "突破界限·火n3",
+                    "label": "$limit_fire_n3",
+                    "description": "$limit_fire_n3_description",
+                    "pipeline_override": {
+                        "Combat.Entry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "Global.AutoCombat.BacktoEntry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "DailyRes.Go1": {
+                            "next": "DailyRes.Limit.Fire.Entry"
+                        }
+                    }
+                },
+                {
+                    "name": "突破界限·水n3",
+                    "label": "$limit_water_n3",
+                    "description": "$limit_water_n3_description",
+                    "pipeline_override": {
+                        "Combat.Entry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "Global.AutoCombat.BacktoEntry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "DailyRes.Go1": {
+                            "next": "DailyRes.Limit.Water.Entry"
+                        }
+                    }
+                },
+                {
+                    "name": "突破界限·木n3",
+                    "label": "$limit_wood_n3",
+                    "description": "$limit_wood_n3_description",
+                    "pipeline_override": {
+                        "Combat.Entry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "Global.AutoCombat.BacktoEntry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "DailyRes.Go1": {
+                            "next": "DailyRes.Limit.Wood.Entry"
+                        }
+                    }
+                },
+                {
+                    "name": "突破界限·世界n3",
+                    "label": "$limit_world_n3",
+                    "description": "$limit_world_n3_description",
+                    "pipeline_override": {
+                        "Combat.Entry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "Global.AutoCombat.BacktoEntry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "DailyRes.Go1": {
+                            "next": "DailyRes.Limit.World.Entry"
+                        }
+                    }
+                },
+                {
+                    "name": "突破界限·天n3",
+                    "label": "$limit_heaven_n3",
+                    "description": "$limit_heaven_n3_description",
+                    "pipeline_override": {
+                        "Combat.Entry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "Global.AutoCombat.BacktoEntry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "DailyRes.Go1": {
+                            "next": "DailyRes.Limit.Heaven.Entry"
+                        }
+                    }
+                },
+                {
+                    "name": "突破界限·冥n3",
+                    "label": "$limit_underworld_n3",
+                    "description": "$limit_underworld_n3_description",
+                    "pipeline_override": {
+                        "Combat.Entry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "Global.AutoCombat.BacktoEntry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "DailyRes.Go1": {
+                            "next": "DailyRes.Limit.Underworld.Entry"
+                        }
+                    }
+                },
+                {
+                    "name": "突破界限·魔n3",
+                    "label": "$limit_demon_n3",
+                    "description": "$limit_demon_n3_description",
+                    "pipeline_override": {
+                        "Combat.Entry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "Global.AutoCombat.BacktoEntry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "DailyRes.Go1": {
+                            "next": "DailyRes.Limit.Demon.Entry"
+                        }
+                    }
+                },
+                {
+                    "name": "突破界限·英雄n3",
+                    "label": "$limit_hero_n3",
+                    "description": "$limit_hero_n3_description",
+                    "pipeline_override": {
+                        "Combat.Entry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "Global.AutoCombat.BacktoEntry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "DailyRes.Go1": {
+                            "next": "DailyRes.Limit.Hero.Entry"
+                        }
+                    }
+                },
+                {
+                    "name": "突破界限·零n3",
+                    "label": "$limit_zero_n3",
+                    "description": "$limit_zero_n3_description",
+                    "pipeline_override": {
+                        "Combat.Entry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "Global.AutoCombat.BacktoEntry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "DailyRes.Go1": {
+                            "next": "DailyRes.Limit.Zero.Entry"
+                        }
+                    }
+                },
+                {
+                    "name": "突破界限·神n3",
+                    "label": "$limit_god_n3",
+                    "description": "$limit_god_n3_description",
+                    "pipeline_override": {
+                        "Combat.Entry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "Global.AutoCombat.BacktoEntry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "DailyRes.Go1": {
+                            "next": "DailyRes.Limit.God.Entry"
+                        }
+                    }
+                },
+                {
+                    "name": "突破界限·全n3",
+                    "label": "$limit_all_n3",
+                    "description": "$limit_all_n3_description",
+                    "pipeline_override": {
+                        "Combat.Entry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "Global.AutoCombat.BacktoEntry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "DailyRes.Go1": {
+                            "next": "DailyRes.Limit.All.Entry"
+                        }
+                    }
+                },
+                {
+                    "name": "突破界限·无限n3",
+                    "label": "$limit_infinity_n3",
+                    "description": "$limit_infinity_n3_description",
+                    "pipeline_override": {
+                        "Combat.Entry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "Global.AutoCombat.BacktoEntry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "DailyRes.Go1": {
+                            "next": "DailyRes.Limit.Infinity.Entry"
+                        }
+                    }
+                },
+                {
+                    "name": "突破界限·斩击n2",
+                    "label": "$limit_slash_n2",
+                    "description": "$limit_slash_n2_description",
+                    "pipeline_override": {
+                        "Combat.Entry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "Global.AutoCombat.BacktoEntry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "DailyRes.Go1": {
+                            "next": "DailyRes.Limit.Slash.Entry"
+                        }
+                    }
+                },
+                {
+                    "name": "突破界限·刺击n2",
+                    "label": "$limit_thrust_n2",
+                    "description": "$limit_thrust_n2_description",
+                    "pipeline_override": {
+                        "Combat.Entry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "Global.AutoCombat.BacktoEntry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "DailyRes.Go1": {
+                            "next": "DailyRes.Limit.Thrust.Entry"
+                        }
+                    }
+                },
+                {
+                    "name": "突破界限·打击n2",
+                    "label": "$limit_knock_n2",
+                    "description": "$limit_knock_n2_description",
+                    "pipeline_override": {
+                        "Combat.Entry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "Global.AutoCombat.BacktoEntry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "DailyRes.Go1": {
+                            "next": "DailyRes.Limit.Knock.Entry"
+                        }
+                    }
+                },
+                {
+                    "name": "突破界限·无n2",
+                    "label": "$limit_none_n2",
+                    "description": "$limit_none_n2_description",
+                    "pipeline_override": {
+                        "Combat.Entry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "Global.AutoCombat.BacktoEntry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "DailyRes.Go1": {
+                            "next": "DailyRes.Limit.None.Entry"
+                        }
+                    }
+                },
+                {
+                    "name": "突破界限·射击n2",
+                    "label": "$limit_shot_n2",
+                    "description": "$limit_shot_n2_description",
+                    "pipeline_override": {
+                        "Combat.Entry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "Global.AutoCombat.BacktoEntry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "DailyRes.Go1": {
+                            "next": "DailyRes.Limit.Shot.Entry"
+                        }
+                    }
+                },
+                {
+                    "name": "突破界限·魔法n2",
+                    "label": "$limit_magic_n2",
+                    "description": "$limit_magic_n2_description",
+                    "pipeline_override": {
+                        "Combat.Entry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "Global.AutoCombat.BacktoEntry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "DailyRes.Go1": {
+                            "next": "DailyRes.Limit.Magic.Entry"
+                        }
+                    }
+                },
+                {
+                    "name": "突破界限·横一文字n2",
+                    "label": "$limit_horizontal_n2",
+                    "description": "$limit_horizontal_n2_description",
+                    "pipeline_override": {
+                        "Combat.Entry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "Global.AutoCombat.BacktoEntry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "DailyRes.Go1": {
+                            "next": "DailyRes.Limit.Horizontal.Entry"
+                        }
+                    }
+                },
+                {
+                    "name": "突破界限·狙击n2",
+                    "label": "$limit_snipe_n2",
+                    "description": "$limit_snipe_n2_description",
+                    "pipeline_override": {
+                        "Combat.Entry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "Global.AutoCombat.BacktoEntry": {
+                            "next": "DailyRes.Entry"
+                        },
+                        "DailyRes.Go1": {
+                            "next": "DailyRes.Limit.Snipe.Entry"
+                        }
+                    }
+                },
+                {
+                    "name": "自定义每日任务",
+                    "label": "$custom_stage_AP",
+                    "description": "$custom_stage_AP_description",
+                    "option": [
+                        "custom_stage_AP"
+                    ]
+                }
+            ]
+        },
+        "use_formation": {
+            "type": "checkbox",
+            "label": "$use_formation",
+            "description": "$use_formation_description",
+            "default_case": [
+                "if_formation"
+            ],
+            "cases": [
+                {
+                    "name": "if_formation",
+                    "label": "$if_formation",
+                    "pipeline_override": {
+                        "Combat.Entry": {
+                            "next": "Global.AutoCombat.TeamSelect"
+                        }
+                    }
+                }
+            ]
+        },
+        "custom_stage_AP": {
+            "type": "input",
+            "label": "$custom_stage_AP",
+            "description": "$custom_stage_AP_description",
+            "inputs": [
+                {
+                    "name": "关卡名称关键词",
+                    "label": "$custom_stage_input",
+                    "description": "$custom_stage_input_description",
+                    "default": "",
+                    "pipeline_type": "string",
+                    "verify": "^(?!\\d+$).+$"
+                },
+                {
+                    "name": "难度关键词",
+                    "label": "$difficulty_input",
+                    "description": "$difficulty_input_description",
+                    "default": "",
+                    "pipeline_type": "string",
+                    "verify": "^(?!\\d+$).+$"
+                }
+            ],
+            "pipeline_override": {
+                "DailyRes.Custom.Entry": {
+                    "action": {
+                        "param": {
+                            "custom_action_param": {
+                                "name": "{关卡名称关键词}",
+                                "difficulty": "{难度关键词}"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "custom_stage_Activity": {
+            "type": "input",
+            "label": "$custom_stage_activity",
+            "description": "$custom_stage_activity_description",
+            "inputs": [
+                {
+                    "name": "兑换物种类",
+                    "label": "$item_choice",
+                    "description": "$item_choice_description",
+                    "default": "",
+                    "pipeline_type": "string",
+                    "verify": "^(?!\\d+$).+$"
+                },
+                {
+                    "name": "难度",
+                    "label": "$difficulty",
+                    "description": "$difficulty_description",
+                    "default": "",
+                    "pipeline_type": "string"
+                }
+            ],
+            "pipeline_override": {
+                "Combat.Entry": {
+                    "next": "Activity.Entry"
+                },
+                "Global.AutoCombat.BacktoEntry": {
+                    "next": "Activity.Entry"
+                },
+                "Activity.Select": {
+                    "action": {
+                        "param": {
+                            "custom_action_param": {
+                                "name": "{兑换物种类}",
+                                "difficulty": "{难度}"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "json_load": {
+            "type": "select",
+            "label": "$json_load",
+            "description": "$json_load_description",
+            "binding": [
+                "choose_stage_dungeon",
+                "choose_stage_AP"
+            ],
+            "cases": [
+                {
+                    "name": "自定义选择组合",
+                    "label": "$custom_select_json",
+                    "description": "$custom_select_json_description",
+                    "option": [
+                        "select_support",
+                        "select_formation",
+                        "select_combat_list"
+                    ]
+                },
+                {
+                    "name": "统一从选择的json文件中自动获取",
+                    "label": "$select_json",
+                    "description": "$select_json_description",
+                    "option": [
+                        "select_json"
+                    ]
+                }
+            ]
+        },
+        "select_support_fast": {
+            "type": "switch",
+            "label": "$select_support_fast",
+            "description": "$select_support_fast_description",
+            "default_case": "No",
+            "cases": [
+                {
+                    "name": "Yes",
+                    "pipeline_override": {
+                        "Global.AutoCombat.SelectSupportInfo": {
+                            "action": {
+                                "param": {
+                                    "custom_action_param": {
+                                        "select_support_fast": true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "No",
+                    "pipeline_override": {
+                        "Global.AutoCombat.SelectSupportInfo": {
+                            "action": {
+                                "param": {
+                                    "custom_action_param": {
+                                        "select_support_fast": false
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "select_json": {
+            "type": "input",
+            "label": "$select_json",
+            "description": "$select_json_description",
+            "inputs": [
+                {
+                    "name": "全部文件名",
+                    "label": "$json_path",
+                    "description": "$json_path_description",
+                    "default": "default.json",
+                    "pipeline_type": "string",
+                    "verify": ".+\\.json$"
+                }
+            ],
+            "pipeline_override": {
+                "Global.AutoCombat.SelectSupport": {
+                    "action": {
+                        "param": {
+                            "custom_action_param": "{全部文件名}"
+                        }
+                    }
+                },
+                "Global.AutoCombat.Formation": {
+                    "action": {
+                        "param": {
+                            "custom_action_param": "{全部文件名}"
+                        }
+                    }
+                },
+                "Global.AutoCombat": {
+                    "action": {
+                        "param": {
+                            "custom_action_param": "{全部文件名}"
+                        }
+                    }
+                }
+            }
+        },
+        "select_support": {
+            "type": "select",
+            "label": "$select_support",
+            "description": "$select_support_description",
+            "cases": [
+                {
+                    "name": "从选择的json文件中自动获取",
+                    "label": "$select_from_list",
+                    "description": "$select_from_list_description",
+                    "option": [
+                        "select_json_support"
+                    ]
+                },
+                {
+                    "name": "自定义选择组合",
+                    "label": "$custom_select",
+                    "description": "$custom_select_description",
+                    "option": [
+                        "select_support_notlist_basic_info",
+                        "select_support_notlist"
+                    ]
+                }
+            ]
+        },
+        "select_json_support": {
+            "type": "input",
+            "label": "$select_json",
+            "description": "$select_json_description",
+            "inputs": [
+                {
+                    "name": "助战文件名",
+                    "label": "$json_path",
+                    "description": "$json_path_description",
+                    "default": "default.json",
+                    "pipeline_type": "string",
+                    "verify": ".+\\.json$"
+                }
+            ],
+            "pipeline_override": {
+                "Global.AutoCombat.SelectSupport": {
+                    "action": {
+                        "param": {
+                            "custom_action_param": "{助战文件名}"
+                        }
+                    }
+                }
+            }
+        },
+        "select_support_notlist_basic_info": {
+            "type": "input",
+            "label": "$basic_info",
+            "description": "$basic_info_description",
+            "inputs": [
+                {
+                    "name": "name",
+                    "label": "$name",
+                    "description": "$name_description",
+                    "default": "",
+                    "pipeline_type": "string",
+                    "verify": ".+"
+                },
+                {
+                    "name": "id",
+                    "label": "$id",
+                    "description": "$id_description",
+                    "default": "",
+                    "pipeline_type": "int",
+                    "verify": "^(0|[1-9]\\d*)$"
+                },
+                {
+                    "name": "S.A.Lv",
+                    "label": "$S.A.Lv",
+                    "description": "$S.A.Lv_description",
+                    "default": "",
+                    "pipeline_type": "int",
+                    "verify": "^(0|[1-9]\\d*)$"
+                },
+                {
+                    "name": "AR",
+                    "label": "$AR",
+                    "description": "$AR_description",
+                    "default": "",
+                    "pipeline_type": "string",
+                    "verify": ".+"
+                }
+            ],
+            "pipeline_override": {
+                "Global.AutoCombat.SelectSupport": {
+                    "action": {
+                        "param": {
+                            "custom_action_param": {
+                                "name": "{name}",
+                                "id": "{id}",
+                                "S.A.Lv": "{S.A.Lv}",
+                                "AR": "{AR}"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "select_support_notlist": {
+            "type": "select",
+            "label": "$select_support_distinct",
+            "description": "$select_support_distinct_description",
+            "cases": [
+                {
+                    "name": "数值筛选",
+                    "label": "$template_A",
+                    "description": "$template_A_description",
+                    "option": [
+                        "A"
+                    ]
+                },
+                {
+                    "name": "种子筛选",
+                    "label": "$template_B",
+                    "description": "$template_B_description",
+                    "option": [
+                        "B"
+                    ]
+                }
+            ]
+        },
+        "A": {
+            "type": "input",
+            "label": "$template_A",
+            "description": "$template_A_description",
+            "inputs": [
+                {
+                    "name": "Level",
+                    "label": "$level",
+                    "description": "$level_description",
+                    "default": "",
+                    "pipeline_type": "int",
+                    "verify": "^(0|[1-9]\\d*)$"
+                },
+                {
+                    "name": "Skill",
+                    "label": "$Skill",
+                    "description": "$Skill_description",
+                    "default": "",
+                    "pipeline_type": "int",
+                    "verify": "^(0|[1-9]\\d*)$"
+                },
+                {
+                    "name": "ATK",
+                    "label": "$atk",
+                    "description": "$atk_description",
+                    "default": "",
+                    "pipeline_type": "int",
+                    "verify": "^(0|[1-9]\\d*)$"
+                },
+                {
+                    "name": "HP",
+                    "label": "$hp",
+                    "description": "$hp_description",
+                    "default": "",
+                    "pipeline_type": "int",
+                    "verify": "^(0|[1-9]\\d*)$"
+                }
+            ],
+            "pipeline_override": {
+                "Global.AutoCombat.SelectSupport": {
+                    "action": {
+                        "param": {
+                            "custom_action_param": {
+                                "Level": "{Level}",
+                                "Skill": "{Skill}",
+                                "ATK": "{ATK}",
+                                "HP": "{HP}"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "B": {
+            "type": "input",
+            "label": "$template_B",
+            "description": "$template_B_description",
+            "inputs": [
+                {
+                    "name": "SLevel",
+                    "label": "$SLevel",
+                    "description": "$SLevel_description",
+                    "default": "",
+                    "pipeline_type": "int",
+                    "verify": "^(0|[1-9]\\d*)$"
+                },
+                {
+                    "name": "SSkill",
+                    "label": "$SSkill",
+                    "description": "$SSkill_description",
+                    "default": "",
+                    "pipeline_type": "int",
+                    "verify": "^(0|[1-9]\\d*)$"
+                },
+                {
+                    "name": "SATK",
+                    "label": "$SATK",
+                    "description": "$SATK_description",
+                    "default": "",
+                    "pipeline_type": "int",
+                    "verify": "^(0|[1-9]\\d*)$"
+                },
+                {
+                    "name": "SHP",
+                    "label": "$SHP",
+                    "description": "$SHP_description",
+                    "default": "",
+                    "pipeline_type": "int",
+                    "verify": "^(0|[1-9]\\d*)$"
+                }
+            ],
+            "pipeline_override": {
+                "Global.AutoCombat.SelectSupport": {
+                    "action": {
+                        "param": {
+                            "custom_action_param": {
+                                "SLevel": "{SLevel}",
+                                "SSkill": "{SSkill}",
+                                "SATK": "{SATK}",
+                                "SHP": "{SHP}"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "select_team": {
+            "type": "input",
+            "label": "$select_team",
+            "description": "$select_team_description",
+            "binding": [
+                "choose_stage_dungeon",
+                "choose_stage_AP"
+            ],
+            "inputs": [
+                {
+                    "name": "输入队伍ID",
+                    "label": "$team_id_input",
+                    "description": "$team_id_input_description",
+                    "default": "",
+                    "pipeline_type": "int",
+                    "verify": "^([1-9]|1[0-5])$"
+                }
+            ],
+            "pipeline_override": {
+                "Global.AutoCombat.TeamSelect": {
+                    "action": {
+                        "param": {
+                            "custom_action_param": "{输入队伍ID}"
+                        }
+                    }
+                }
+            }
+        },
+        "select_formation": {
+            "type": "input",
+            "label": "$select_formation",
+            "description": "$select_formation_description",
+            "inputs": [
+                {
+                    "name": "编队文件名",
+                    "label": "$json_path",
+                    "description": "$json_path_description",
+                    "default": "",
+                    "pipeline_type": "string",
+                    "verify": ".+\\.json$"
+                }
+            ],
+            "pipeline_override": {
+                "Global.AutoCombat.Formation": {
+                    "action": {
+                        "param": {
+                            "custom_action_param": "{编队文件名}"
+                        }
+                    }
+                }
+            }
+        },
+        "select_combat_list": {
+            "type": "input",
+            "label": "$select_combat_list",
+            "description": "$select_combat_list_description",
+            "inputs": [
+                {
+                    "name": "战斗列表文件名",
+                    "label": "$json_path",
+                    "description": "$json_path_description",
+                    "default": "",
+                    "pipeline_type": "string",
+                    "verify": ".+\\.json$"
+                }
+            ],
+            "pipeline_override": {
+                "Global.AutoCombat": {
+                    "action": {
+                        "param": {
+                            "custom_action_param": "{战斗列表文件名}"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

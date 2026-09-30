@@ -124,7 +124,9 @@ data class OptionSectionState(
     val options: List<OptionEditorState>,
 )
 
-enum class OptionKind { Select, Switch, Checkbox, Input }
+enum class OptionKind { Select, Switch, Checkbox, Input, Show }
+
+data class BindingEditorState(val targetLabel: String, val perTarget: Boolean)
 
 /** option 编辑投影；UI 按 kind 选控件，不递归解释原始 PI JSON */
 data class OptionEditorState(
@@ -141,6 +143,10 @@ data class OptionEditorState(
     /** 仅 Checkbox 有意义，见 [OptionDefinition.Checkbox.minCount] */
     val minCount: Int = 0,
     val maxCount: Int? = null,
+    val binding: BindingEditorState? = null,
+    val shows: List<ShowDefinition> = emptyList(),
+    /** Changes when a binding switches buckets; lets an input discard the previous bucket's draft. */
+    val editScope: String = "",
 ) {
     /** 含默认回退；Select/Switch 至多一个，Checkbox 按声明序 */
     val activeCases: List<OptionCaseState> get() = cases.filter { it.active }
@@ -193,10 +199,12 @@ data class InputFieldState(
     val description: String?,
     /** 输入框掩码，不回显原文 */
     val password: Boolean = false,
+    val allowEmpty: Boolean = false,
 )
 
 /** UI 即时校验与 Builder 复验共用（docs/domain-model.md §6.6） */
-fun validateInputCandidate(type: PipelineType, verify: Regex?, candidate: String): Boolean {
+fun validateInputCandidate(type: PipelineType, verify: Regex?, candidate: String, allowEmpty: Boolean = false): Boolean {
+    if (allowEmpty && candidate.isEmpty()) return true
     val typeOk = when (type) {
         PipelineType.StringType -> true
         PipelineType.IntType -> candidate.isEmpty() || candidate.toLongOrNull() != null

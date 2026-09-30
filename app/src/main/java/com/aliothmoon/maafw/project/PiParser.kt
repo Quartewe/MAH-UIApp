@@ -272,6 +272,10 @@ object PiParser {
                 ?.let(::githubRepository)
                 ?.takeIf(String::isNotBlank),
             mirrorchyanRid = root.string("mirrorchyan_rid")?.trim()?.takeIf(String::isNotBlank),
+            softwareRepository = (root.string("software_github") ?: root.string("github"))?.let(::githubRepository),
+            projectRepository = (root.string("project_github") ?: root.string("github"))?.let(::githubRepository),
+            resourceRepository = root.string("resource_github")?.let(::githubRepository),
+            resourceVersion = root.string("resource_version"),
         )
     }
 
@@ -450,6 +454,11 @@ object PiParser {
         val label = text.label(obj.string("label")) ?: name
         val description = text.description(obj.string("description"))
         val icon = obj.iconPath()
+        val binding = when (val value = obj["binding"]) {
+            is JsonPrimitive -> listOfNotNull(value.contentOrNull)
+            is JsonArray -> value.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+            else -> emptyList()
+        }.filter(String::isNotBlank).distinct()
         val applicability = OptionApplicability(
             controllers = obj.stringList("controller"),
             resources = obj.stringList("resource"),
@@ -464,9 +473,9 @@ object PiParser {
                     }
                 }?.takeIf { d -> cases.any { it.name == d } }
                 if (type == "select") {
-                    OptionDefinition.Select(name, label, description, cases, defaultCase, icon, applicability)
+                    OptionDefinition.Select(name, label, description, cases, defaultCase, icon, applicability, binding)
                 } else {
-                    OptionDefinition.Switch(name, label, description, cases, defaultCase, icon, applicability)
+                    OptionDefinition.Switch(name, label, description, cases, defaultCase, icon, applicability, binding)
                 }
             }
 
@@ -501,6 +510,7 @@ object PiParser {
                     applicability,
                     minCount = minCount,
                     maxCount = maxCount,
+                    bindingTargets = binding,
                 )
             }
 
@@ -519,8 +529,24 @@ object PiParser {
                     obj.objectOrEmpty("pipeline_override"),
                     icon,
                     applicability,
+                    binding,
                 )
             }
+
+            "show" -> OptionDefinition.Show(
+                name, label, description,
+                (obj["shows"] as? JsonArray).orEmpty().mapNotNull { item ->
+                    val show = item as? JsonObject
+                    val path = text.label(show?.string("path") ?: (item as? JsonPrimitive)?.contentOrNull)
+                        ?: return@mapNotNull null
+                    com.aliothmoon.maafw.domain.ShowDefinition(
+                        label = text.label(show?.string("label")) ?: show?.string("name") ?: label,
+                        path = path,
+                        jsonPath = show?.string("json_path"),
+                        mode = show?.string("mode") ?: "auto",
+                    )
+                }, icon, applicability,
+            )
 
             // 协议允许的类型，但热键是桌面端语义，Android 端跳过不投影
             "hotkey" -> {
@@ -670,6 +696,7 @@ object PiParser {
             description = text.description(obj.string("description")),
             label = text.label(obj.string("label")) ?: name,
             password = password,
+            allowEmpty = !password && (obj["default"] as? JsonPrimitive)?.contentOrNull == "",
         )
     }
 

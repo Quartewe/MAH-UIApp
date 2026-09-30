@@ -92,6 +92,15 @@ data class ConfiguredTask(
     /** 显示别名；null = 用定义 label。重命名与「(副本)」后缀都写这里，规范 taskName 不动 */
     val customLabel: String? = null,
     val instanceId: String = newTaskInstanceId(),
+    /** Per task instance, per source option, per target value. Old flat configurations stay common. */
+    val bindings: Map<String, OptionBindingState> = emptyMap(),
+)
+
+@Serializable
+data class OptionBindingState(
+    val target: String,
+    val perTarget: Boolean = false,
+    val values: Map<String, Map<String, OptionValue>> = emptyMap(),
 )
 
 fun newTaskInstanceId(): String = java.util.UUID.randomUUID().toString()

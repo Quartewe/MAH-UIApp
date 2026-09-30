@@ -324,6 +324,9 @@ private fun OverlayTaskDetailPane(
                     OverlayOptionPane(
                         task = selected,
                         locked = locked,
+                        onSetBinding = { option, enabled ->
+                            onIntent(SessionIntent.SetTaskBinding(active.id, selected.instanceId, option, enabled))
+                        },
                         onSetOption = { option, value ->
                             onIntent(
                                 SessionIntent.SetTaskOption(
@@ -351,6 +354,7 @@ private fun OverlayOptionPane(
     task: ResolvedConfiguredTask,
     locked: Boolean,
     onSetOption: (String, OptionValue) -> Unit,
+    onSetBinding: (String, Boolean) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -367,6 +371,7 @@ private fun OverlayOptionPane(
             options = task.options,
             locked = locked,
             onSetOption = onSetOption,
+            onSetBinding = onSetBinding,
         )
         task.description?.takeIf { it.isNotBlank() }?.let {
             Text(

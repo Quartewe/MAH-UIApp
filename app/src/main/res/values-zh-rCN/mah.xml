@@ -1,0 +1,16 @@
+<resources>
+    <string name="mah_show_empty">尚无进度记录</string>
+    <string name="mah_show_refresh">刷新</string>
+    <string name="mah_binding_per_target">按“%1$s”分别保存设置</string>
+    <string name="mah_update_title">项目与资源更新</string>
+    <string name="mah_update_project">项目版本</string>
+    <string name="mah_update_resource">素材版本</string>
+    <string name="mah_update_source">更新源：GitHub</string>
+    <string name="mah_update_check_project">检查项目更新</string>
+    <string name="mah_update_check_resource">检查素材更新</string>
+    <string name="mah_update_install">安装 %1$s</string>
+    <string name="mah_update_no_package">尚未发布适用于此 App 的更新包</string>
+    <string name="mah_update_current">已是最新版本</string>
+    <string name="mah_update_done">更新已安装</string>
+    <string name="mah_update_failed">更新失败：%1$s</string>
+</resources>

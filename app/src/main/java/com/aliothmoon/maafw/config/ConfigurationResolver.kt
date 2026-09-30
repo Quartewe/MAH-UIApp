@@ -200,13 +200,13 @@ object ConfigurationResolver {
                     unavailableReason = applicability,
                     unsupported = !isControllerSupported(definition, taskDefinition),
                     options = if (isActive) {
-                        buildOptionEditors(
+                        TaskOptionBindings.decorate(definition, configured, buildOptionEditors(
                             definition = definition,
                             optionNames = taskDefinition.optionNames,
-                            values = configured.optionValues,
+                            values = TaskOptionBindings.effectiveValues(definition, configured),
                             controller = controller,
                             resourceName = resourceName,
-                        )
+                        ))
                     } else {
                         emptyList()
                     },
@@ -311,6 +311,11 @@ object ConfigurationResolver {
     ): OptionEditorState {
         val value = values[option.name]
         return when (option) {
+            is OptionDefinition.Show -> OptionEditorState(
+                name = option.name, label = option.label, description = option.description,
+                kind = OptionKind.Show, depth = depth, value = null,
+                cases = emptyList(), inputs = emptyList(), icon = option.icon, shows = option.shows,
+            )
             is OptionDefinition.Choice -> {
                 val selected = (value as? OptionValue.SingleCase)?.case
                     ?.takeIf { s -> option.cases.any { it.name == s } }
@@ -367,6 +372,7 @@ object ConfigurationResolver {
                             patternMessage = field.patternMessage,
                             description = field.description,
                             password = field.password,
+                            allowEmpty = field.allowEmpty,
                         )
                     },
                     icon = option.icon,

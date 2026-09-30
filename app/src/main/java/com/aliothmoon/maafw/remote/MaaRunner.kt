@@ -53,6 +53,7 @@ class MaaRunner(private val agentHost: AgentHost) {
 
     /** 已构建的 resource 对应的路径；变了就重建 */
     private var loadedResourcePaths: List<String> = emptyList()
+    private var loadedResourceRevision: String = ""
 
     /**
      * 已建 controller 绑定的 display_id；变了必须重建
@@ -313,7 +314,8 @@ class MaaRunner(private val agentHost: AgentHost) {
             } ?: return "虚拟显示器未启动"
         }
 
-        if (resource == null || loadedResourcePaths != payload.resourcePaths) {
+        if (resource == null || loadedResourcePaths != payload.resourcePaths || loadedResourceRevision != payload.resourceRevision) {
+            releaseTasker(lib)
             releaseResource(lib)
             val res = lib.MaaResourceCreate() ?: return "MaaResourceCreate 失败"
             lib.MaaResourceAddSink(res, eventSink, null)
@@ -326,6 +328,7 @@ class MaaRunner(private val agentHost: AgentHost) {
             }
             resource = res
             loadedResourcePaths = payload.resourcePaths
+            loadedResourceRevision = payload.resourceRevision
             // 资源换了，绑定关系也得重来
             releaseTasker(lib)
         }
@@ -353,6 +356,21 @@ class MaaRunner(private val agentHost: AgentHost) {
             controller = ctrl
             boundDisplayId = displayId
             releaseTasker(lib)
+        }
+
+        // PI display_* controls normalized screenshots, independently of the physical display size.
+        Memory(1).use { raw ->
+            raw.setByte(0, if (payload.displayRaw) 1.toByte() else 0.toByte())
+            if (lib.MaaControllerSetOption(controller, 3, raw, 1).toInt() == 0) return "Cannot set screenshot raw size"
+        }
+        if (!payload.displayRaw) {
+            Memory(4).use { size ->
+                val longSide = payload.displayLongSide
+                size.setInt(0, longSide ?: payload.displayShortSide ?: 720)
+                if (lib.MaaControllerSetOption(controller, if (longSide != null) 1 else 2, size, 4).toInt() == 0) {
+                    return "Cannot set screenshot target size"
+                }
+            }
         }
 
         val needsTasker = synchronized(lifecycleLock) { tasker == null }
@@ -554,6 +572,7 @@ class MaaRunner(private val agentHost: AgentHost) {
         resource?.let(lib::MaaResourceDestroy)
         resource = null
         loadedResourcePaths = emptyList()
+        loadedResourceRevision = ""
     }
 
     private inline fun notify(block: IMaaRunnerCallback.() -> Unit) {

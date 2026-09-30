@@ -89,6 +89,17 @@ class RunLauncher(
     /** 只护投递这一段，不护整轮；运行中的第二次 Start 由 RunnerPort 拒 */
     private val gate = Mutex()
 
+    /** Shares the launch lock, so UI and scheduled launches cannot race a project transaction. */
+    suspend fun <T> changeProjectWhenIdle(change: suspend () -> T): T {
+        check(gate.tryLock()) { "A task is being prepared" }
+        try {
+            check(!runnerPort.state.value.phase.isBusy && settling.get()?.isActive != true) { "Stop tasks before updating resources" }
+            return change()
+        } finally {
+            gate.unlock()
+        }
+    }
+
     /** 已受理过的请求 id；只留最近若干条，闹钟重投的间隔是秒级，不需要长记忆 */
     private val handled = ArrayDeque<RunRequestId>()
 

@@ -344,6 +344,7 @@ fun TaskOptionSheet(
     task: ResolvedConfiguredTask,
     locked: Boolean,
     onSetOption: (String, OptionValue) -> Unit,
+    onSetBinding: (String, Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
     MaaModalSheet(onDismiss = onDismiss) { sheetModifier ->
@@ -351,6 +352,7 @@ fun TaskOptionSheet(
             task = task,
             locked = locked,
             onSetOption = onSetOption,
+            onSetBinding = onSetBinding,
             onClose = onDismiss,
             modifier = sheetModifier.padding(bottom = MaaDesignTokens.Spacing.xl),
         )
@@ -362,6 +364,7 @@ internal fun TaskOptionContent(
     task: ResolvedConfiguredTask,
     locked: Boolean,
     onSetOption: (String, OptionValue) -> Unit,
+    onSetBinding: (String, Boolean) -> Unit,
     modifier: Modifier = Modifier,
     onClose: (() -> Unit)? = null,
 ) {
@@ -385,6 +388,7 @@ internal fun TaskOptionContent(
                 options = task.options,
                 locked = locked,
                 onSetOption = onSetOption,
+            onSetBinding = onSetBinding,
                 carded = true,
             )
             task.description?.takeIf { it.isNotBlank() }?.let { description ->

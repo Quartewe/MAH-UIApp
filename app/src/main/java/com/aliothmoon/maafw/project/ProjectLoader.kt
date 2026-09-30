@@ -169,6 +169,16 @@ class ProjectLoader(
             telemetry = pi.root?.let(PiParser::parseTelemetry),
             translations = translations,
         )
+        try {
+            definition.tasks.forEach { task ->
+                com.aliothmoon.maafw.config.TaskOptionBindings.effectiveValues(
+                    definition, com.aliothmoon.maafw.domain.ConfiguredTask(task.name),
+                )
+            }
+        } catch (e: IllegalArgumentException) {
+            diagnostics += error(INTERFACE_JSON, com.aliothmoon.maafw.i18n.uiTextFromProject(e.message))
+            return ProjectLoadResult.Failure(diagnostics)
+        }
         return ProjectLoadResult.Ready(definition, diagnostics)
     }
 

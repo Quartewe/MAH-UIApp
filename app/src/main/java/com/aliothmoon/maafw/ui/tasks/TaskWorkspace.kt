@@ -134,6 +134,9 @@ internal fun TaskWorkspace(
             onSetOption = { optionName, value ->
                 onIntent(SessionIntent.SetTaskOption(active.id, editingTask.instanceId, optionName, value))
             },
+            onSetBinding = { optionName, enabled ->
+                onIntent(SessionIntent.SetTaskBinding(active.id, editingTask.instanceId, optionName, enabled))
+            },
             onDismiss = { editingTaskInstanceId = null },
         )
     }

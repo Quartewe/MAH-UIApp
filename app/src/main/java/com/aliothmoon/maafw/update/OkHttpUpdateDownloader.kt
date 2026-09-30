@@ -211,7 +211,8 @@ class OkHttpUpdateDownloader(
         val safeVersion = update.version.replace(UNSAFE_FILE_NAME, "_")
             .take(MAX_VERSION_LENGTH)
             .ifBlank { "unknown" }
-        return File(AppPaths.UPDATES_CACHE_DIR, "maafw-${safeVersion}-${identity}.apk")
+        require(update.fileExtension in setOf("apk", "zip"))
+        return File(AppPaths.UPDATES_CACHE_DIR, "maafw-${safeVersion}-${identity}.${update.fileExtension}")
     }
 
     private fun digestOf(file: File): String = try {

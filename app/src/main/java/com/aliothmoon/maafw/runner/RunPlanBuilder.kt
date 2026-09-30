@@ -1,6 +1,7 @@
 package com.aliothmoon.maafw.runner
 
 import com.aliothmoon.maafw.config.ConfigurationResolver
+import com.aliothmoon.maafw.config.TaskOptionBindings
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.DiagnosticSeverity
 import com.aliothmoon.maafw.domain.DiagnosticMessages
@@ -124,7 +125,7 @@ object RunPlanBuilder {
             compileOptions(
                 definition = definition,
                 optionNames = task.optionNames,
-                values = configured.optionValues,
+                values = TaskOptionBindings.effectiveValues(definition, configured),
                 scopeLabel = "task:${task.name}",
                 controllerName = controller.name,
                 resourceName = resource.name,
@@ -203,6 +204,7 @@ object RunPlanBuilder {
             // 见 OptionApplicability：不满足即整个跳过，且不记诊断
             if (!option.applicability.matches(controllerName, resourceName)) return
             when (option) {
+                is OptionDefinition.Show -> Unit
                 is OptionDefinition.Choice -> {
                     val value = values[name] as? OptionValue.SingleCase
                     // 回落与 Resolver 同源，见 OptionDefinition.Choice.effectiveDefaultCase
@@ -263,7 +265,7 @@ object RunPlanBuilder {
                     var valid = true
                     for (field in option.fields) {
                         val raw = inputValues[field.name] ?: field.default
-                        if (!validateInputCandidate(field.pipelineType, field.verify, raw)) {
+                        if (!validateInputCandidate(field.pipelineType, field.verify, raw, field.allowEmpty)) {
                             diagnostics += runtimeError(
                                 scopeLabel,
                                 DiagnosticMessages.invalidInput(
@@ -331,6 +333,7 @@ object RunPlanBuilder {
         val whole = PLACEHOLDER.matchEntire(content)
         if (whole != null) {
             val (field, raw) = fields[whole.groupValues[1]] ?: return JsonPrimitive(content)
+            if (raw.isEmpty() && field.allowEmpty) return JsonPrimitive("")
             return typedPrimitive(field, raw, scopeLabel, optionName, diagnostics)
                 ?: JsonPrimitive(content)
         }

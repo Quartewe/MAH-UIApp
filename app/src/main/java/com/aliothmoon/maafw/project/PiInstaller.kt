@@ -87,6 +87,8 @@ class PiInstaller(
     fun ensureInstalled(onProgress: PiUnpackProgress = NO_PROGRESS): File {
         val base = AppPaths.ROOT
         val target = File(base, AppFiles.PI_DIR)
+        ProjectPackageInstaller(target).recover()
+        recoverBootstrap(base, target)
         if (isCurrentInstall(base, target)) return target
         return install(base, onProgress)
     }
@@ -96,25 +98,54 @@ class PiInstaller(
     fun reinstall(onProgress: PiUnpackProgress = NO_PROGRESS): File =
         install(AppPaths.ROOT, onProgress)
 
+    @Synchronized
+    fun installUpdate(archive: File, target: ProjectPackageTarget, version: String) =
+        ProjectPackageInstaller(installedDir()).install(archive, target, version)
+
     private fun isCurrentInstall(base: File, target: File): Boolean {
         val marker = File(base, PI_MARKER_NAME)
-        return target.isDirectory && marker.isFile && marker.readText().trim() == versionCode.toString()
+        return target.isDirectory && marker.isFile &&
+            (marker.readText().trim() == versionCode.toString() ||
+                (File(target, ProjectPackageInstaller.STATE).isFile && File(target, INTERFACE_JSON).isFile))
     }
 
     private fun install(base: File, onProgress: PiUnpackProgress): File {
         val target = File(base, AppFiles.PI_DIR)
         val marker = File(base, PI_MARKER_NAME)
 
-        // 顺序不能换：标记先失效，解包中途掉电时残留内容不会被当成完整的一份
-        marker.delete()
-        // 换标记之前的包留在外部私有目录里的，不删会一直躺着，adb 翻这个目录时看着像还在生效
-        File(base, LEGACY_MARKER_NAME).delete()
-        target.deleteRecursively()
-        target.mkdirs()
-        unpack(target, onProgress)
+        val staged = File(base, ".pi-bootstrap")
+        val backup = File(base, ".pi-bootstrap-old")
+        recoverBootstrap(base, target)
+        staged.deleteRecursively()
+        staged.mkdirs()
+        unpack(staged, onProgress)
+        val state = File(staged, ProjectPackageInstaller.STATE)
+        if (state.isFile) {
+            val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; encodeDefaults = true }
+            val installed = json.decodeFromString<InstalledProjectPackages>(state.readText())
+            state.writeText(json.encodeToString(installed.copy(revision = java.util.UUID.randomUUID().toString())))
+        }
+        // Repairing the bundled resources must not erase user progress and custom combat files.
+        for (name in listOf("config", "data", "debug")) {
+            File(target, name).takeIf(File::isDirectory)?.copyRecursively(File(staged, name), overwrite = true)
+        }
+        if (target.exists()) check(target.renameTo(backup)) { "Cannot back up PI" }
+        if (!staged.renameTo(target)) {
+            backup.renameTo(target)
+            throw PiUnpackException("Cannot activate PI")
+        }
         ensureNoMedia(base)
         marker.writeText(versionCode.toString())
+        backup.deleteRecursively()
+        File(base, LEGACY_MARKER_NAME).delete()
         return target
+    }
+
+    private fun recoverBootstrap(base: File, target: File) {
+        val backup = File(base, ".pi-bootstrap-old")
+        if (backup.exists()) {
+            if (!target.exists()) check(backup.renameTo(target)) else backup.deleteRecursively()
+        }
     }
 
     private fun unpack(dest: File, onProgress: PiUnpackProgress) {

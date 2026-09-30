@@ -70,6 +70,10 @@ data class ProjectMetadata(
     /** 从 metadata.github 解出的 owner/repo；只用于 GitHub 更新源 */
     val githubRepository: String? = null,
     val mirrorchyanRid: String? = null,
+    val softwareRepository: String? = null,
+    val projectRepository: String? = null,
+    val resourceRepository: String? = null,
+    val resourceVersion: String? = null,
 )
 
 /**
@@ -187,6 +191,7 @@ sealed interface OptionDefinition {
     val description: String?
     val icon: String?
     val applicability: OptionApplicability
+    val bindingTargets: List<String>
 
     /** Select/Switch 共享 cases + defaultCase */
     sealed interface Choice : OptionDefinition {
@@ -210,6 +215,7 @@ sealed interface OptionDefinition {
         override val defaultCase: String?,
         override val icon: String? = null,
         override val applicability: OptionApplicability = OptionApplicability.Unrestricted,
+        override val bindingTargets: List<String> = emptyList(),
     ) : Choice
 
     data class Switch(
@@ -220,6 +226,7 @@ sealed interface OptionDefinition {
         override val defaultCase: String?,
         override val icon: String? = null,
         override val applicability: OptionApplicability = OptionApplicability.Unrestricted,
+        override val bindingTargets: List<String> = emptyList(),
     ) : Choice
 
     data class Checkbox(
@@ -234,6 +241,7 @@ sealed interface OptionDefinition {
         val minCount: Int = 0,
         /** null = 不限 */
         val maxCount: Int? = null,
+        override val bindingTargets: List<String> = emptyList(),
     ) : OptionDefinition {
         fun acceptsCount(count: Int): Boolean = count >= minCount && (maxCount == null || count <= maxCount)
     }
@@ -246,14 +254,33 @@ sealed interface OptionDefinition {
         val pipelineOverride: JsonObject,
         override val icon: String? = null,
         override val applicability: OptionApplicability = OptionApplicability.Unrestricted,
+        override val bindingTargets: List<String> = emptyList(),
+    ) : OptionDefinition
+
+    /** Read-only runtime output; never contributes user values or pipeline overrides. */
+    data class Show(
+        override val name: String,
+        override val label: String,
+        override val description: String?,
+        val shows: List<ShowDefinition>,
+        override val icon: String? = null,
+        override val applicability: OptionApplicability = OptionApplicability.Unrestricted,
+        override val bindingTargets: List<String> = emptyList(),
     ) : OptionDefinition
 }
+
+data class ShowDefinition(
+    val label: String,
+    val path: String,
+    val jsonPath: String? = null,
+    val mode: String = "auto",
+)
 
 /** Input 无 cases，返回 empty */
 fun OptionDefinition.casesOrEmpty(): List<OptionCaseDefinition> = when (this) {
     is OptionDefinition.Choice -> cases
     is OptionDefinition.Checkbox -> cases
-    is OptionDefinition.Input -> emptyList()
+    is OptionDefinition.Input, is OptionDefinition.Show -> emptyList()
 }
 
 data class OptionCaseDefinition(
@@ -282,6 +309,8 @@ data class InputFieldDefinition(
      * 为 true 时 [default] 恒为空，PI 写了也在解析期丢掉
      */
     val password: Boolean = false,
+    /** An explicitly empty default in MAH means keep the existing team/file selection. */
+    val allowEmpty: Boolean = false,
 ) {
     /** 要进诊断、日志的输入值一律过这里：password 字段只给掩码 */
     fun displayValue(raw: String): String = if (password) SECRET_MASK else raw

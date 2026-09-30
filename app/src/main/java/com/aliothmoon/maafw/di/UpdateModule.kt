@@ -9,6 +9,7 @@ import com.aliothmoon.maafw.update.UpdateService
 import org.koin.dsl.module
 
 val updateModule = module {
+    factory { com.aliothmoon.maafw.update.ProjectUpdatesViewModel(get(), get(), get(), get(), get()) }
     single { MirrorChyanLatestApi(get()) }
     single { GitHubReleasesApi(get()) }
     single { MirrorChyanUpdateClient(get()) }

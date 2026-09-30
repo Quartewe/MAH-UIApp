@@ -471,8 +471,16 @@ class SessionViewModel(
 
             is SessionIntent.SetTaskOption -> guarded {
                 val value = intent.value.secured(intent.optionName)
+                val definition = (projectRepository.state.value as? ProjectState.Ready)?.definition ?: return@guarded
                 mutateTask(intent.configurationId, intent.taskInstanceId) { task ->
-                    task.copy(optionValues = task.optionValues + (intent.optionName to value))
+                    com.aliothmoon.maafw.config.TaskOptionBindings.setValue(definition, task, intent.optionName, value)
+                }
+            }
+
+            is SessionIntent.SetTaskBinding -> guarded {
+                val definition = (projectRepository.state.value as? ProjectState.Ready)?.definition ?: return@guarded
+                mutateTask(intent.configurationId, intent.taskInstanceId) { task ->
+                    com.aliothmoon.maafw.config.TaskOptionBindings.setPerTarget(definition, task, intent.optionName, intent.perTarget)
                 }
             }
 
@@ -601,7 +609,9 @@ class SessionViewModel(
             }
 
             SessionIntent.ReinstallPi -> guarded {
-                if (piInstall.reinstall()) projectRepository.reload()
+                runLauncher.changeProjectWhenIdle {
+                    if (piInstall.reinstall()) projectRepository.reload()
+                }
             }
 
             is SessionIntent.Start -> start(intent.surface)

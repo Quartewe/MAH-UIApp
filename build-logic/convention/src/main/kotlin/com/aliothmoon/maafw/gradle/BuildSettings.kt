@@ -16,11 +16,11 @@ private fun Project.loadLocalProperties(): Properties = Properties().apply {
  * Blank counts as unset; callers treat that as a soft failure
  */
 internal fun Project.pathSetting(key: String, envName: String): String? =
-    (loadLocalProperties().getProperty(key) ?: System.getenv(envName))?.takeIf { it.isNotBlank() }
+    (providers.gradleProperty(key).orNull ?: loadLocalProperties().getProperty(key) ?: System.getenv(envName))?.takeIf { it.isNotBlank() }
 
 /** Text switches use the same precedence as path switches */
 internal fun Project.textSetting(key: String, envName: String): String? =
-    (loadLocalProperties().getProperty(key) ?: System.getenv(envName))?.takeIf { it.isNotBlank() }
+    (providers.gradleProperty(key).orNull ?: loadLocalProperties().getProperty(key) ?: System.getenv(envName))?.takeIf { it.isNotBlank() }
 
 /**
  * Signing material flips the precedence: a release build injects env vars and a stale
@@ -38,7 +38,7 @@ internal fun Project.maaFrameworkVersion(): String =
 
 /** Comma separated list switch, read from local.properties only */
 internal fun Project.listSetting(key: String): List<String> =
-    (loadLocalProperties().getProperty(key) ?: "").split(',')
+    (providers.gradleProperty(key).orNull ?: loadLocalProperties().getProperty(key) ?: "").split(',')
         .map(String::trim)
         .filter(String::isNotEmpty)
 

@@ -48,6 +48,8 @@ interface MaaFrameworkLibrary : Library {
 
     fun MaaControllerConnected(ctrl: Pointer?): Byte
 
+    fun MaaControllerSetOption(ctrl: Pointer?, key: Int, value: Pointer?, valSize: Long): Byte
+
     // ── Tasker ──
 
     fun MaaTaskerCreate(): Pointer?

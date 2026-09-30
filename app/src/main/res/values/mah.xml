@@ -1,0 +1,16 @@
+<resources>
+    <string name="mah_show_empty">No progress recorded yet</string>
+    <string name="mah_show_refresh">Refresh</string>
+    <string name="mah_binding_per_target">Separate settings for each %1$s</string>
+    <string name="mah_update_title">Project and resources</string>
+    <string name="mah_update_project">Project version</string>
+    <string name="mah_update_resource">Resource version</string>
+    <string name="mah_update_source">Source: GitHub</string>
+    <string name="mah_update_check_project">Check project update</string>
+    <string name="mah_update_check_resource">Check resource update</string>
+    <string name="mah_update_install">Install %1$s</string>
+    <string name="mah_update_no_package">No compatible package has been published yet</string>
+    <string name="mah_update_current">Already up to date</string>
+    <string name="mah_update_done">Update installed</string>
+    <string name="mah_update_failed">Update failed: %1$s</string>
+</resources>

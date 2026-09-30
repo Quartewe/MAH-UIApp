@@ -229,6 +229,13 @@ sealed interface SessionIntent {
         val value: OptionValue,
     ) : SessionIntent
 
+    data class SetTaskBinding(
+        val configurationId: RunConfigurationId,
+        val taskInstanceId: String,
+        val optionName: String,
+        val perTarget: Boolean,
+    ) : SessionIntent
+
     /** 不属于任何运行配置：改一次对所有配置的所有任务生效 */
     data class SetGlobalOption(val optionName: String, val value: OptionValue) : SessionIntent
 

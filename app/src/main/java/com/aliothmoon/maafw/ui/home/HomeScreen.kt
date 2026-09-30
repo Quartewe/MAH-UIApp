@@ -125,6 +125,7 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
         ) {
             OverviewCard(state, update, onSettingsIntent)
+            ProjectUpdatesCard(locked = state.configurationLocked)
             ResourceCard(state, onIntent)
             ControllerCard(state, onIntent)
             RunModeCard(state, onIntent)

@@ -14,7 +14,12 @@ internal fun UserConfiguration.mapOptionValues(transform: (String, OptionValue) 
         resourceOptionValues = resourceOptionValues.mapValues { it.value.mapped() },
         configurations = configurations.map { configuration ->
             configuration.copy(
-                tasks = configuration.tasks.map { it.copy(optionValues = it.optionValues.mapped()) },
+                tasks = configuration.tasks.map { task -> task.copy(
+                    optionValues = task.optionValues.mapped(),
+                    bindings = task.bindings.mapValues { (_, state) ->
+                        state.copy(values = state.values.mapValues { it.value.mapped() })
+                    },
+                ) },
             )
         },
     )
@@ -24,7 +29,10 @@ private fun UserConfiguration.allOptionValues(): Sequence<OptionValue> = sequenc
     yieldAll(globalOptionValues.values)
     controllerOptionValues.values.forEach { yieldAll(it.values) }
     resourceOptionValues.values.forEach { yieldAll(it.values) }
-    configurations.forEach { configuration -> configuration.tasks.forEach { yieldAll(it.optionValues.values) } }
+    configurations.forEach { configuration -> configuration.tasks.forEach { task ->
+        yieldAll(task.optionValues.values)
+        task.bindings.values.forEach { state -> state.values.values.forEach { yieldAll(it.values) } }
+    } }
 }
 
 /** option 名 → 其中的 password 字段名；没有 password 字段的 option 不出现 */

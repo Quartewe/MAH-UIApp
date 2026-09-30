@@ -33,6 +33,10 @@ data class RunPlanPayload(
      * 特权进程侧还会补 `PI_CLIENT_MAAFW_VERSION`
      */
     val piEnv: Map<String, String> = emptyMap(),
+    val resourceRevision: String = "",
+    val displayShortSide: Int? = null,
+    val displayLongSide: Int? = null,
+    val displayRaw: Boolean = false,
 )
 
 @Serializable

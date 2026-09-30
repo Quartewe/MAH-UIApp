@@ -394,6 +394,10 @@ class MaaFrameworkRunnerPort(
             apkPath = apkPath,
             nativeLibraryDir = nativeLibraryDir,
             piEnv = plan.piEnv,
+            resourceRevision = com.aliothmoon.maafw.project.ProjectPackageInstaller(piRoot).state().revision,
+            displayShortSide = plan.controller.displayShortSide,
+            displayLongSide = plan.controller.displayLongSide,
+            displayRaw = plan.controller.displayRaw,
         )
         if (!service.startRun(runPlanWireJson.encodeToString(payload))) {
             return uiTextOf(R.string.msg_reject_service_rejected)
