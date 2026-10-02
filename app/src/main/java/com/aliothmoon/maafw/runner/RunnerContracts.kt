@@ -114,14 +114,36 @@ sealed interface RunnerEvent {
      * [name] 来自配方 `agent.runtimes[].name`，写了就优先显示
      */
     data class AgentConnected(val index: Int, val total: Int, val exec: String, val name: String? = null) : RunnerEvent {
-        val label: String
-            get() = name?.takeIf(String::isNotBlank)
-                ?: exec.substringAfterLast('/').substringAfterLast('\\').ifBlank { "agent[$index]" }
+        val label: String get() = agentLabel(name, exec, index)
+    }
+
+    /**
+     * 一个 agent child 没被要求退出却退了：崩溃、被系统杀掉、或自己提前退出
+     *
+     * 特权进程等在 child 上得来的事实，不靠 MaaFramework 报——框架要到下一次 custom 调用超时才知道对端没了
+     *
+     * [crashReport] 是 `log/crash/` 下的现场文件名，只有被 debuggerd 接管的信号（SIGSEGV、SIGABRT 这些）才有
+     */
+    data class AgentExited(
+        val index: Int,
+        val exec: String,
+        val exitCode: Int,
+        val crashReport: String? = null,
+        val name: String? = null,
+    ) : RunnerEvent {
+        val label: String get() = agentLabel(name, exec, index)
+
+        val signal: Int? get() = AgentExitCode.signalOf(exitCode)
     }
 
     /** PI 声明的消息模板，唯一一条不是原始转储的事件（见 [FocusMessage]） */
     data class Focus(val focus: FocusMessage) : RunnerEvent
 }
+
+/** 配方 `agent.runtimes[].name` 写了就用它，否则取可执行体的文件名 */
+private fun agentLabel(name: String?, exec: String, index: Int): String =
+    name?.takeIf(String::isNotBlank)
+        ?: exec.substringAfterLast('/').substringAfterLast('\\').ifBlank { "agent[$index]" }
 
 sealed interface RunnerCommandResult {
     data object Accepted : RunnerCommandResult
