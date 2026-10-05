@@ -162,6 +162,7 @@ val runnerModule = module {
             runMode = get<AppSettingsManager>().runMode::value,
             scope = get(named<AppCoroutineScope>()),
             journal = get(),
+            renderText = get<LocalizedTextRenderer>()::render,
         )
     }
 }
