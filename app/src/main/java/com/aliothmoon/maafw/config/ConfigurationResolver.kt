@@ -197,7 +197,6 @@ object ConfigurationResolver {
                     applicable = applicability == null,
                     missingDefinition = false,
                     unavailableReason = applicability,
-                    unsupported = !isControllerSupported(definition, taskDefinition),
                     options = if (isActive) {
                         TaskOptionBindings.decorate(definition, configured, buildOptionEditors(
                             definition = definition,
