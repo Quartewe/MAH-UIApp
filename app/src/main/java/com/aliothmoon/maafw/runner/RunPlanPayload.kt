@@ -52,8 +52,8 @@ data class RuntimeTaskPayload(
     val taskName: String,
     val entry: String,
     /**
-     * 有序 patch，原样作为 JSON array 传给 MaaTaskerPostTask
-     * MaaFramework 侧按数组顺序合并（Task/Context.cpp 的 is_array 分支），不能在这里提前合并成一个对象
+     * Builder 已递归合并任务的选项，保留列表线格式并原样传给 MaaTaskerPostTask。
+     * 框架会整体替换 custom_action_param，不能依靠它合并多个选项的嵌套业务参数。
      */
     val pipelineOverrides: List<JsonObject>,
 )

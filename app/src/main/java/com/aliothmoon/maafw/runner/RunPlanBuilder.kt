@@ -135,7 +135,7 @@ object RunPlanBuilder {
             runtimeTasks += RuntimeTask(
                 taskName = task.name,
                 entry = task.entry,
-                pipelineOverrides = patches,
+                pipelineOverrides = mergePipelineOverrides(patches),
                 label = task.label.ifBlank { task.name },
             )
         }
@@ -176,6 +176,29 @@ object RunPlanBuilder {
                 },
             ),
         )
+    }
+
+    /**
+     * PI 选项先按声明顺序合成完整参数。MaaFramework 的覆盖会整体替换
+     * custom_action_param 等字段，不能把选项碎片直接作为数组交给它合并。
+     * 只递归合并对象；数组、标量和 null 均由后值替换，不修改 definition 中的原对象。
+     */
+    private fun mergePipelineOverrides(patches: List<JsonObject>): List<JsonObject> {
+        fun merge(target: MutableMap<String, JsonElement>, patch: JsonObject) {
+            for ((key, value) in patch) {
+                val previous = target[key]
+                target[key] = if (previous is JsonObject && value is JsonObject) {
+                    val nested = previous.toMutableMap()
+                    merge(nested, value)
+                    JsonObject(nested)
+                } else {
+                    value
+                }
+            }
+        }
+        val merged = linkedMapOf<String, JsonElement>()
+        patches.forEach { merge(merged, it) }
+        return if (merged.isEmpty()) emptyList() else listOf(JsonObject(merged))
     }
 
     /** 每作用域独立 processed set；同名 option 至多处理一次 */

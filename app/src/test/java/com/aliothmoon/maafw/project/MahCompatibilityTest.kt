@@ -11,6 +11,31 @@ import org.junit.Test
 import java.io.File
 
 class MahCompatibilityTest {
+    @Test fun `custom sanzo03 retains identity with empty numeric or seed filters`() {
+        for (filter in listOf("数值筛选", "种子筛选")) {
+            val definition = definition()
+            val task = ConfiguredTask("体力作战", optionValues = mapOf(
+                "json_load" to OptionValue.SingleCase("自定义选择组合"),
+                "select_support" to OptionValue.SingleCase("自定义选择组合"),
+                "select_support_notlist" to OptionValue.SingleCase(filter),
+                "select_support_notlist_basic_info" to OptionValue.Inputs(mapOf("name" to "Sanzo", "id" to "3")),
+            ))
+            val result = RunPlanBuilder.build(definition, configuration(task))
+            assertTrue(result.toString(), result is RunPlanResult.Success)
+            val plan = (result as RunPlanResult.Success).plan
+            // Inspect the last value sent to MaaFramework, which replaces this whole field.
+            val params = plan.tasks.single().pipelineOverrides.last { "Global.AutoCombat.SelectSupport" in it }
+                .getValue("Global.AutoCombat.SelectSupport").jsonObject.getValue("action").jsonObject
+                .getValue("param").jsonObject.getValue("custom_action_param").jsonObject
+            assertEquals(filter, JsonPrimitive("Sanzo"), params["name"])
+            assertEquals(filter, JsonPrimitive(3), params["id"])
+            val fields = if (filter == "数值筛选") listOf("Level", "Skill", "ATK", "HP")
+                else listOf("SLevel", "SSkill", "SATK", "SHP")
+            fields.forEach { assertEquals(filter, JsonPrimitive(""), params[it]) }
+            assertTrue("Inactive filter must not leak", if (filter == "数值筛选") "SLevel" !in params else "Level" !in params)
+        }
+    }
+
     private fun definition(): ProjectDefinition {
         val root = File(requireNotNull(javaClass.classLoader?.getResource("mah/interface.json")).toURI()).parentFile!!
         val result = loadWithLocale("zh-CN", DirectoryProjectSource(root)) as ProjectLoadResult.Ready

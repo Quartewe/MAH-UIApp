@@ -119,7 +119,8 @@ class GlobalOptionTest {
         val definition = load(pi()).definition
         val patches = plan(definition, configWith()).plan.tasks.single().pipelineOverrides
         val from = patches.mapNotNull { it["Fight"]?.jsonObject?.get("from")?.jsonPrimitive?.content }
-        assertEquals(listOf("global", "task"), from)
+        assertEquals(listOf("task"), from)
+        assertEquals("0", patches.single()["Fight"]!!.jsonObject["volume"]!!.jsonPrimitive.content)
     }
 
     @Test
@@ -152,9 +153,11 @@ class GlobalOptionTest {
 
         val onGlobal = plan(definition, configWith(resourceName = "国际服")).plan.tasks.single()
         assertEquals(
-            listOf("global", "task"),
+            listOf("task"),
             onGlobal.pipelineOverrides.mapNotNull { it["Fight"]?.jsonObject?.get("from")?.jsonPrimitive?.content },
         )
+        assertTrue(onCn.pipelineOverrides.none { "volume" in it["Fight"]!!.jsonObject })
+        assertEquals("0", onGlobal.pipelineOverrides.single()["Fight"]!!.jsonObject["volume"]!!.jsonPrimitive.content)
     }
 
     /** 生态里绝大多数 option 不写 default_case，回落首个 case 而不是把整轮拦下 */

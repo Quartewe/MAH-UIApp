@@ -271,11 +271,13 @@ class RunPlanBuilderTest {
         assertEquals("CloudADB", plan.controller.name)
         assertEquals(listOf("resource_adb", "resource_cloud_adb"), plan.controller.attachResourcePaths)
         assertEquals(listOf("启动游戏"), plan.tasks.map { it.taskName })
-        assertTrue(cloudPatch in plan.tasks.single().pipelineOverrides)
+        assertEquals(JsonPrimitive(true), plan.tasks.single().pipelineOverrides.single()["StartUpGame"]?.jsonObject?.get("enabled"))
 
         val local = (RunPlanBuilder.build(withCloud, config.copy(activeControllerName = null)) as RunPlanResult.Success).plan
         assertEquals("ADB", local.controller.name)
         assertEquals(listOf("启动游戏", "仅本地"), local.tasks.map { it.taskName })
-        assertTrue(local.tasks.none { cloudPatch in it.pipelineOverrides })
+        assertTrue(local.tasks.none { task -> task.pipelineOverrides.any {
+            it["StartUpGame"]?.jsonObject?.get("enabled") == JsonPrimitive(true)
+        } })
     }
 }

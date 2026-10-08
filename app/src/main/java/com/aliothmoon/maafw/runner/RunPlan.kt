@@ -23,7 +23,7 @@ data class RunPlan(
 data class RuntimeTask(
     val taskName: String,
     val entry: String,
-    /** 有序 patch；Runner 按序传给 MaaFramework，不得提前合并 */
+    /** Builder 已按优先级递归合并选项；空列表或单个完整覆盖对象，Runner 原样传递。 */
     val pipelineOverrides: List<JsonObject>,
     /** 加载期已物化的展示名；缺省回落 [taskName] */
     val label: String = taskName,

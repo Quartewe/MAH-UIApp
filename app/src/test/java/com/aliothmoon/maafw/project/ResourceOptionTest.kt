@@ -135,10 +135,10 @@ class ResourceOptionTest {
     @Test
     fun `resource 排在 global 之后 task option 之前`() {
         val definition = load(pi()).definition
-        assertEquals(
-            listOf("task_base", "global", "resource", "task"),
-            fromMarks(plan(definition, configWith())),
-        )
+        val result = plan(definition, configWith())
+        assertEquals(listOf("task"), fromMarks(result))
+        val node = result.plan.tasks.single().pipelineOverrides.single()["Fight"]!!.jsonObject
+        assertEquals("official", node["channel"]!!.jsonPrimitive.content)
     }
 
     @Test
