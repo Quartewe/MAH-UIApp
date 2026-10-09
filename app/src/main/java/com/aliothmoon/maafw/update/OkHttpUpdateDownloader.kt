@@ -97,6 +97,7 @@ class OkHttpUpdateDownloader(
                         val read = input.read(buffer)
                         if (read < 0) break
                         if (read == 0) continue
+                        require(update.fileExtension != "json" || downloadedBytes + read <= 8L * 1024 * 1024) { "Resource descriptor is too large" }
                         out.write(buffer, 0, read)
                         digest.update(buffer, 0, read)
                         downloadedBytes += read
@@ -211,7 +212,7 @@ class OkHttpUpdateDownloader(
         val safeVersion = update.version.replace(UNSAFE_FILE_NAME, "_")
             .take(MAX_VERSION_LENGTH)
             .ifBlank { "unknown" }
-        require(update.fileExtension in setOf("apk", "zip"))
+        require(update.fileExtension in setOf("apk", "zip", "json"))
         return File(AppPaths.UPDATES_CACHE_DIR, "maafw-${safeVersion}-${identity}.${update.fileExtension}")
     }
 
