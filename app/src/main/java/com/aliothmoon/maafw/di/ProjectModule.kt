@@ -22,7 +22,7 @@ val projectModule = module {
             versionCode = BuildConfig.VERSION_CODE,
         )
     }
-    single { PiInstallCoordinator(get()) }
+    single { PiInstallCoordinator(get(), get()) }
     single<ProjectSource> { InstalledProjectSource(get()) }
     single { ProjectLoader(get()) }
     single<ProjectRepository> { DefaultProjectRepository(get()) }

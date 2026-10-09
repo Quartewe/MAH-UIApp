@@ -10,6 +10,9 @@ import com.aliothmoon.maafw.update.UpdateService
 import org.koin.dsl.module
 
 val updateModule = module {
+    single<com.aliothmoon.maafw.project.ResourceBootstrapper> {
+        com.aliothmoon.maafw.update.GitHubResourceBootstrapper(get(), get())
+    }
     single { ProjectUpdateManager(get(), get(), get(), get(), get()) }
     factory { com.aliothmoon.maafw.update.ProjectUpdatesViewModel(get(), get()) }
     single { MirrorChyanLatestApi(get()) }

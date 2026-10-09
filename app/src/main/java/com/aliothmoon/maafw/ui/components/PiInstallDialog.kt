@@ -26,12 +26,13 @@ import androidx.compose.ui.window.DialogProperties
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.project.PiInstallState
+import com.aliothmoon.maafw.project.ResourcePreparationPhase
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 
 /**
  * PI 解包的阻塞弹窗
  *
- * 只有解包与失败两档渲染：检查一闪而过，未检查与就绪都不该挡着人
+ * 解包、资源准备与失败共用初始化入口；未检查与就绪不显示
  * 关掉失败弹窗不等于解决了问题，重来的入口在设置页
  */
 @Composable
@@ -46,7 +47,24 @@ fun PiInstallDialog(
     }
 
     when (state) {
-        is PiInstallState.Unpacking -> UnpackingDialog(state)
+        is PiInstallState.Unpacking -> PreparationDialog(
+            title = stringResource(R.string.pi_install_title),
+            progress = if (state.total > 0) state.percent / 100f else null,
+            detail = if (state.total > 0) stringResource(R.string.pi_install_progress, state.done, state.total, state.percent)
+                else pluralStringResource(R.plurals.pi_install_progress_count, state.done, state.done),
+            currentPath = state.currentPath,
+            note = stringResource(R.string.pi_install_note),
+        )
+        is PiInstallState.Resources -> PreparationDialog(
+            title = stringResource(when (state.phase) {
+                ResourcePreparationPhase.Checking -> R.string.mah_resources_checking
+                ResourcePreparationPhase.Downloading -> R.string.mah_resources_downloading
+                ResourcePreparationPhase.Installing -> R.string.mah_resources_installing
+            }),
+            progress = state.progress,
+            detail = state.progress?.let { "${(it * 100).toInt()}%" }.orEmpty(),
+            note = stringResource(R.string.mah_resources_prepare_note),
+        )
 
         is PiInstallState.Failed -> if (!dismissed) {
             MaaPromptDialog(
@@ -66,7 +84,13 @@ fun PiInstallDialog(
 
 /** 解包期间不给任何出口：中途退出留下的是半份内容，下次启动照样得重解 */
 @Composable
-private fun UnpackingDialog(state: PiInstallState.Unpacking) {
+private fun PreparationDialog(
+    title: String,
+    progress: Float?,
+    detail: String,
+    currentPath: String = "",
+    note: String,
+) {
     Dialog(
         onDismissRequest = {},
         properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
@@ -83,12 +107,12 @@ private fun UnpackingDialog(state: PiInstallState.Unpacking) {
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
-                    text = stringResource(R.string.pi_install_title),
+                    text = title,
                     style = MaterialTheme.typography.titleMedium,
                 )
-                if (state.total > 0) {
+                if (progress != null) {
                     LinearProgressIndicator(
-                        progress = { state.percent / 100f },
+                        progress = { progress },
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = MaaDesignTokens.Spacing.lg),
@@ -101,26 +125,13 @@ private fun UnpackingDialog(state: PiInstallState.Unpacking) {
                     )
                 }
                 Text(
-                    text = if (state.total > 0) {
-                        stringResource(
-                            R.string.pi_install_progress,
-                            state.done,
-                            state.total,
-                            state.percent,
-                        )
-                    } else {
-                        pluralStringResource(
-                            R.plurals.pi_install_progress_count,
-                            state.done,
-                            state.done,
-                        )
-                    },
+                    text = detail,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = MaaDesignTokens.Spacing.sm),
                 )
                 Text(
-                    text = state.currentPath,
+                    text = currentPath,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -128,7 +139,7 @@ private fun UnpackingDialog(state: PiInstallState.Unpacking) {
                     modifier = Modifier.padding(top = MaaDesignTokens.Spacing.xxs),
                 )
                 Text(
-                    text = stringResource(R.string.pi_install_note),
+                    text = note,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,

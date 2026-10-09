@@ -10,6 +10,7 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.zip.ZipInputStream
+import kotlinx.serialization.json.*
 
 /**
  * 打包进 APK 的 PI 只读包
@@ -122,7 +123,27 @@ class PiInstaller(
         val state = File(staged, ProjectPackageInstaller.STATE)
         if (state.isFile) {
             val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; encodeDefaults = true }
-            val installed = json.decodeFromString<InstalledProjectPackages>(state.readText())
+            var installed = json.decodeFromString<InstalledProjectPackages>(state.readText())
+            val previous = runCatching { ProjectPackageInstaller(target).state() }.getOrNull()
+            val resources = previous?.owners?.get("resource").orEmpty()
+            if (resources.isNotEmpty()) {
+                for (name in resources.keys) {
+                    require(ProjectPackageInstaller.isResourcePath(name)) { "Invalid resource path: $name" }
+                    require(name !in installed.owners["project"].orEmpty()) { "Resource overlaps bundled project: $name" }
+                    val source = ProjectPackageInstaller.checked(target, name)
+                    if (source.isFile) {
+                        val destination = ProjectPackageInstaller.checked(staged, name)
+                        destination.parentFile!!.mkdirs()
+                        source.copyTo(destination, overwrite = true)
+                    }
+                }
+                installed = installed.copy(resourceVersion = previous!!.resourceVersion,
+                    owners = installed.owners + ("resource" to resources), resourceSizes = previous.resourceSizes, resourceContentId = previous.resourceContentId)
+                val pi = File(staged, INTERFACE_JSON)
+                val metadata = Json.parseToJsonElement(pi.readText()).jsonObject.toMutableMap()
+                metadata["resource_version"] = JsonPrimitive(previous.resourceVersion)
+                pi.writeText(JsonObject(metadata).toString())
+            }
             state.writeText(json.encodeToString(installed.copy(revision = java.util.UUID.randomUUID().toString())))
         }
         // Repairing the bundled resources must not erase user progress and custom combat files.

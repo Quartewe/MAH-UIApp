@@ -184,4 +184,18 @@ class ResourceUpdateServiceTest {
         assertFalse(requests.any { "full-" in it })
     }
 
+    @Test fun `first use bootstrap accepts new published manifest and downloads full`() = runTest(dispatcher) {
+        File(root, ProjectPackageInstaller.STATE).writeText("{}")
+        val pi = File(root, "interface.json")
+        pi.writeText(pi.readText().replace("\"name\":\"test\"", "\"name\":\"test\",\"resource_github\":\"https://github.com/owner/resources\""))
+        val api = mockk<GitHubReleasesApi> {
+            every { parseRepository(any()) } returns "owner/resources"
+            coEvery { releases(any()) } returns UpdateSourceOutcome.Ok(this@ResourceUpdateServiceTest.releases)
+        }
+        GitHubResourceBootstrapper(api, downloader).ensure(root, false) { _, _ -> }
+        assertEquals("C", ProjectPackageInstaller(root).state().resourceVersion)
+        assertTrue(ProjectPackageInstaller(root).resourcesComplete(true))
+        assertTrue(requests.any { "full-C" in it })
+        assertFalse(requests.any { "hotfix" in it })
+    }
 }

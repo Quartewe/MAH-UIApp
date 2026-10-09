@@ -16,4 +16,8 @@
     <string name="mah_update_current">已是最新版本</string>
     <string name="mah_update_done">更新已安装</string>
     <string name="mah_update_failed">更新失败：%1$s</string>
+    <string name="mah_resources_checking">正在检查资源</string>
+    <string name="mah_resources_downloading">正在下载资源</string>
+    <string name="mah_resources_installing">正在解压资源</string>
+    <string name="mah_resources_prepare_note">首次初始化需要联网下载图片和索引。资源齐全后，后续启动会直接复用。</string>
 </resources>

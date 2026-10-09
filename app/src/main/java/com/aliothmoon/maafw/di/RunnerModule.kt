@@ -136,7 +136,7 @@ val runnerModule = module {
             projectRepository = get(),
             configurationStore = get(),
             runnerPort = get(),
-            prechecks = listOf(ForegroundModePrecheck),
+            prechecks = listOf(com.aliothmoon.maafw.runner.PiReadyPrecheck(get()), ForegroundModePrecheck),
             hooks = listOf(
                 SessionLogHook(get()),
                 NotificationHook(get()),

@@ -16,4 +16,8 @@
     <string name="mah_update_current">Already up to date</string>
     <string name="mah_update_done">Update installed</string>
     <string name="mah_update_failed">Update failed: %1$s</string>
+    <string name="mah_resources_checking">Checking resources</string>
+    <string name="mah_resources_downloading">Downloading resources</string>
+    <string name="mah_resources_installing">Extracting resources</string>
+    <string name="mah_resources_prepare_note">The first initialization needs to download images and indexes. Complete resources will be reused on later starts.</string>
 </resources>

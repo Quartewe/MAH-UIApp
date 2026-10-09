@@ -14,7 +14,7 @@ import kotlinx.coroutines.withContext
 import androidx.tracing.trace
 import java.util.concurrent.atomic.AtomicInteger
 
-/** PI 解包的可观测状态；除 [Unpacking] 外几档都是一闪而过，留着是为了状态机完整 */
+/** PI 解包和外置资源准备共用的初始化状态。 */
 sealed interface PiInstallState {
     data object NotChecked : PiInstallState
 
@@ -31,6 +31,8 @@ sealed interface PiInstallState {
 
     data object Ready : PiInstallState
 
+    data class Resources(val phase: ResourcePreparationPhase, val progress: Float? = null) : PiInstallState
+
     data class Failed(val reason: UiText) : PiInstallState
 }
 
@@ -42,7 +44,10 @@ sealed interface PiInstallState {
  *
  * 调用方须先等到 [PiInstallState.Ready] 再去 `ProjectRepository.reload()`
  */
-class PiInstallCoordinator(private val installer: PiInstaller) {
+class PiInstallCoordinator(
+    private val installer: PiInstaller,
+    private val resources: ResourceBootstrapper = ResourceBootstrapper { _, _, _ -> },
+) {
 
     private val _state = MutableStateFlow<PiInstallState>(PiInstallState.NotChecked)
     val state: StateFlow<PiInstallState> = _state.asStateFlow()
@@ -60,7 +65,7 @@ class PiInstallCoordinator(private val installer: PiInstaller) {
         if (!force && _state.value == PiInstallState.Ready) return@withLock true
         _state.value = PiInstallState.Checking
         try {
-            withContext(MaaDispatchers.IO) {
+            val root = withContext(MaaDispatchers.IO) {
                 // 逐条目写状态，几千项的 PI 就是几千次 SessionUiState 重建，而这几秒
                 // 恰好是首屏最挤的时候。解包线程池并发调这里，CAS 只放跨档位的那一次过
                 val lastPercent = AtomicInteger(-1)
@@ -80,13 +85,17 @@ class PiInstallCoordinator(private val installer: PiInstaller) {
                     if (force) installer.reinstall(onProgress) else installer.ensureInstalled(onProgress)
                 }
             }
+            resources.ensure(root, verifyHashes = force) { phase, progress ->
+                _state.value = PiInstallState.Resources(phase, progress)
+            }
             _state.value = PiInstallState.Ready
             true
         } catch (e: CancellationException) {
             // 作用域被取消不是解包失败，状态留在原处交给下一次
             throw e
         } catch (e: Exception) {
-            _state.value = PiInstallState.Failed(uiTextOf(R.string.pi_install_error, e.message.orEmpty()))
+            _state.value = PiInstallState.Failed(if (e is ResourcePreparationException) e.reason
+                else uiTextOf(R.string.pi_install_error, e.message.orEmpty()))
             false
         }
     }

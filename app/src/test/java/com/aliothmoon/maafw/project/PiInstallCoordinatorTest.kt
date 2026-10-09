@@ -120,6 +120,29 @@ class PiInstallCoordinatorTest {
         assertEquals(PiInstallState.Ready, coordinator.state.value)
     }
 
+    @Test
+    fun `resource preparation blocks execution until complete and failed preparation can retry`() = runTest(dispatcher) {
+        every { AppPaths.ROOT } returns temp.newFolder("resources")
+        var fail = true
+        val hashChecks = mutableListOf<Boolean>()
+        lateinit var coordinator: PiInstallCoordinator
+        coordinator = PiInstallCoordinator(PiInstaller(MapPiPackage(files), 11), ResourceBootstrapper { root, verify, progress ->
+            assertTrue(File(root, "interface.json").isFile)
+            hashChecks += verify
+            progress(ResourcePreparationPhase.Downloading, 0.5f)
+            assertEquals(PiInstallState.Resources(ResourcePreparationPhase.Downloading, 0.5f), coordinator.state.value)
+            assertTrue(com.aliothmoon.maafw.runner.PiReadyPrecheck(coordinator).evaluate(io.mockk.mockk()) is com.aliothmoon.maafw.runner.Verdict.Block)
+            if (fail) throw java.io.IOException("offline")
+        })
+        assertFalse(coordinator.ensureInstalled())
+        assertTrue(coordinator.state.value is PiInstallState.Failed)
+        assertTrue(com.aliothmoon.maafw.runner.PiReadyPrecheck(coordinator).evaluate(io.mockk.mockk()) is com.aliothmoon.maafw.runner.Verdict.Block)
+        fail = false
+        assertTrue(coordinator.reinstall())
+        assertEquals(listOf(false, true), hashChecks)
+        assertEquals(com.aliothmoon.maafw.runner.Verdict.Pass, com.aliothmoon.maafw.runner.PiReadyPrecheck(coordinator).evaluate(io.mockk.mockk()))
+    }
+
     private object BrokenPiPackage : PiPackage {
         override fun manifest(): List<String> = listOf("interface.json")
 

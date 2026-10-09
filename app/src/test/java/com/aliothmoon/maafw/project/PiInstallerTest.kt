@@ -58,6 +58,33 @@ class PiInstallerTest {
         assertEquals("user progress", File(root, "config/config.json").readText())
     }
 
+    @Test
+    fun `light bundle reinitialization preserves external inventory and user files`() {
+        val base = temp.newFolder("light")
+        val pkg = MapPiPackage(files + (ProjectPackageInstaller.STATE to "{}"))
+        val installer = installer(base, pkg, 11)
+        val root = installer.ensureInstalled()
+        val imagePath = "resource/base/image/character/a.png"
+        File(root, imagePath).apply { parentFile!!.mkdirs(); writeText("external") }
+        val previous = InstalledProjectPackages(resourceVersion = "event-A",
+            owners = mapOf("resource" to mapOf(imagePath to "hash", "resource/index/missing.json" to "missing")),
+            resourceSizes = mapOf(imagePath to 8L, "resource/index/missing.json" to 2L))
+        File(root, ProjectPackageInstaller.STATE).writeText(kotlinx.serialization.json.Json.encodeToString(previous))
+        for (path in listOf("config/config.json", "data/custom.json", "debug/log.txt")) {
+            File(root, path).apply { parentFile!!.mkdirs(); writeText("user") }
+        }
+        installer.reinstall()
+        val current = ProjectPackageInstaller(root).state()
+        assertEquals(previous.resourceVersion, current.resourceVersion)
+        assertEquals(previous.owners, current.owners)
+        assertEquals(previous.resourceSizes, current.resourceSizes)
+        assertEquals("external", File(root, imagePath).readText())
+        assertFalse(ProjectPackageInstaller(root).resourcesComplete())
+        for (path in listOf("config/config.json", "data/custom.json", "debug/log.txt")) {
+            assertEquals("user", File(root, path).readText())
+        }
+    }
+
     private fun installer(base: File, pkg: PiPackage, versionCode: Int): PiInstaller {
         every { AppPaths.ROOT } returns base
         return PiInstaller(pkg, versionCode)

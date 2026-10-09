@@ -18,6 +18,7 @@ class UpdateModuleTest {
         try {
             koin.get<HttpClientHelper>()
             koin.get<UpdateService>()
+            koin.get<com.aliothmoon.maafw.project.ResourceBootstrapper>()
             koin.get<OkHttpUpdateDownloader>()
         } finally {
             koin.close()

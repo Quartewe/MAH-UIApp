@@ -144,7 +144,7 @@ data class SessionUiState(
         get() = (projectState as? ProjectState.Ready)?.diagnostics.orEmpty() + sessionDiagnostics
 
     val canStart: Boolean
-        get() = runner.phase == RunnerPhase.Idle && activeConfiguration != null
+        get() = piInstallState == PiInstallState.Ready && runner.phase == RunnerPhase.Idle && activeConfiguration != null
 }
 
 /**
