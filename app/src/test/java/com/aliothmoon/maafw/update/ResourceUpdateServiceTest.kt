@@ -154,4 +154,34 @@ class ResourceUpdateServiceTest {
         }
     }
 
+    @Test fun `home update manager installs delta plan under task gate and reloads once`() = runTest(dispatcher) {
+        baseline()
+        val definition = com.aliothmoon.maafw.domain.ProjectDefinition(
+            name = "test", version = "v1", resources = emptyList(), tasks = emptyList(),
+            groups = emptyList(), options = emptyMap(), templates = emptyList(),
+            metadata = com.aliothmoon.maafw.domain.ProjectMetadata(resourceRepository = "owner/resources"),
+        )
+        val repository = FakeProjectRepository(ProjectState.Ready(definition, emptyList()))
+        val installer = mockk<PiInstaller> { every { installedDir() } returns root }
+        val api = mockk<GitHubReleasesApi> {
+            every { parseRepository(any()) } returns "owner/resources"
+            coEvery { releases(any()) } returns UpdateSourceOutcome.Ok(this@ResourceUpdateServiceTest.releases)
+        }
+        var gated = false
+        val launcher = mockk<com.aliothmoon.maafw.runner.RunLauncher> {
+            coEvery { changeProjectWhenIdle<Unit>(any()) } coAnswers {
+                gated = true
+                firstArg<suspend () -> Unit>().invoke()
+            }
+        }
+        val manager = ProjectUpdateManager(repository, installer, api, downloader, launcher)
+        assertTrue(manager.check(ProjectPackageTarget.Resource))
+        manager.install(ProjectPackageTarget.Resource)
+        assertTrue(gated)
+        assertEquals(1, repository.reloadCount)
+        assertEquals("C", manager.state.value.versions.resourceVersion)
+        assertNull(manager.state.value.entries[ProjectPackageTarget.Resource]?.candidate)
+        assertFalse(requests.any { "full-" in it })
+    }
+
 }

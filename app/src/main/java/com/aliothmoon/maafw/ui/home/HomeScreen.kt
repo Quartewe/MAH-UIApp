@@ -125,7 +125,6 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
         ) {
             OverviewCard(state, update, onSettingsIntent)
-            ProjectUpdatesCard(locked = state.configurationLocked)
             ResourceCard(state, onIntent)
             ControllerCard(state, onIntent)
             RunModeCard(state, onIntent)
@@ -157,7 +156,9 @@ private fun OverviewCard(
             labelColor = MaterialTheme.colorScheme.onSurface,
             trailing = { ServiceStatusIndicator(status = state.serviceStatus) },
         )
-        UpdateSection(update, onSettingsIntent)
+        UpdateSection(update, onSettingsIntent) {
+            ProjectUpdatesSection(locked = state.configurationLocked)
+        }
     }
 }
 

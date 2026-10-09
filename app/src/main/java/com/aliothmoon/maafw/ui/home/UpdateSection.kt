@@ -79,13 +79,14 @@ private fun UpdateRowLabel(text: String) {
 }
 
 /**
- * 概览卡里的更新区块（无独立卡头）：源/渠道/CDK 选择与检查、下载入口都在这；
+ * 概览卡里的更新区块：APK 更新设置、项目与资源入口、APK 检查与下载；
  * 启动自检与自动下载两个开关留在设置页的更新卡
  */
 @Composable
 internal fun UpdateSection(
     update: UpdatePanelState,
     onSettingsIntent: (SettingsIntent) -> Unit,
+    projectUpdates: @Composable () -> Unit,
 ) {
     val settingsEnabled = !update.downloading
     var mirrorInfoVisible by remember { mutableStateOf(false) }
@@ -94,7 +95,7 @@ internal fun UpdateSection(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
     ) {
-        UpdateRowLabel(stringResource(R.string.settings_update_source))
+        UpdateRowLabel(stringResource(R.string.mah_update_apk_source))
         IconButton(
             onClick = { mirrorInfoVisible = true },
             modifier = Modifier.size(MaaDesignTokens.IconContainer.sm),
@@ -125,7 +126,7 @@ internal fun UpdateSection(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
     ) {
-        UpdateRowLabel(stringResource(R.string.settings_update_channel))
+        UpdateRowLabel(stringResource(R.string.mah_update_apk_channel))
         Spacer(Modifier.weight(1f))
         listOf(
             UpdateChannel.STABLE to stringResource(R.string.settings_update_channel_stable),
@@ -140,6 +141,7 @@ internal fun UpdateSection(
             )
         }
     }
+    projectUpdates()
     UpdateStatus(update)
     if (update.downloading) {
         DownloadProgressRow(update, onSettingsIntent)
@@ -172,7 +174,7 @@ internal fun UpdateSection(
             Text(
                 text = stringResource(
                     if (update.checking) R.string.settings_update_checking
-                    else R.string.settings_update_check,
+                    else R.string.mah_update_check_apk,
                 ),
             )
         }
