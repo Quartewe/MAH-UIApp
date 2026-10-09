@@ -10,6 +10,7 @@
     <string name="mah_update_check_apk">Check APK update</string>
     <string name="mah_update_apk_source">APK update source</string>
     <string name="mah_update_apk_channel">APK update channel</string>
+    <string name="mah_update_startup_order">Check APK, resources, then project; stop when an update is found</string>
     <string name="mah_update_install">Install %1$s</string>
     <string name="mah_update_no_package">No compatible package has been published yet</string>
     <string name="mah_update_current">Already up to date</string>

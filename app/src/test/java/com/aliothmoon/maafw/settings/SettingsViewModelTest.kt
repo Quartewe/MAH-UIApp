@@ -6,6 +6,8 @@ import com.aliothmoon.maafw.domain.ProjectMetadata
 import com.aliothmoon.maafw.privileged.FakePermissionGateway
 import com.aliothmoon.maafw.project.FakeProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
+import com.aliothmoon.maafw.project.ProjectPackageTarget
+import com.aliothmoon.maafw.update.ProjectUpdateManager
 import com.aliothmoon.maafw.SystemApkInstaller
 import com.aliothmoon.maafw.update.DownloadedUpdate
 import com.aliothmoon.maafw.update.OkHttpUpdateDownloader
@@ -47,6 +49,101 @@ import java.io.File
 class SettingsViewModelTest {
 
     private val dispatcher = UnconfinedTestDispatcher()
+
+    @Test
+    fun `startup checks APK then resource then project when all are current`() = runTest {
+        val calls = mutableListOf<String>()
+        viewModel(
+            service = mockk {
+                coEvery { check(any()) } coAnswers {
+                    calls += "APK"
+                    UpdateCheckResult.UpToDate(UpdateSource.GITHUB, "1.0.0")
+                }
+            },
+            projectUpdates = mockk {
+                coEvery { check(any()) } coAnswers {
+                    calls += firstArg<ProjectPackageTarget>().name
+                    false
+                }
+            },
+            settings = FakeAppSettingsGateway().also { it.setAutoCheckUpdate(true) },
+        )
+        advanceUntilIdle()
+        assertEquals(listOf("APK", "Resource", "Project"), calls)
+    }
+
+    @Test
+    fun `startup stops at the first available update`() = runTest {
+        for (available in listOf("APK", "Resource", "Project")) {
+            val calls = mutableListOf<String>()
+            viewModel(
+                service = mockk {
+                    coEvery { check(any()) } coAnswers {
+                        calls += "APK"
+                        if (available == "APK") {
+                            UpdateCheckResult.UpdateAvailable(UpdateSource.GITHUB, UpdateInfo("2.0.0"))
+                        } else UpdateCheckResult.UpToDate(UpdateSource.GITHUB, "1.0.0")
+                    }
+                },
+                projectUpdates = mockk {
+                    coEvery { check(any()) } coAnswers {
+                        val target = firstArg<ProjectPackageTarget>().name
+                        calls += target
+                        target == available
+                    }
+                },
+                settings = FakeAppSettingsGateway().also { it.setAutoCheckUpdate(true) },
+            )
+            advanceUntilIdle()
+            val order = listOf("APK", "Resource", "Project")
+            assertEquals(order.take(order.indexOf(available) + 1), calls)
+        }
+    }
+
+    @Test
+    fun `disabled startup switch skips all three update channels`() = runTest {
+        val calls = mutableListOf<String>()
+        viewModel(
+            service = mockk {
+                coEvery { check(any()) } coAnswers {
+                    calls += "APK"
+                    UpdateCheckResult.UpToDate(UpdateSource.GITHUB, "1.0.0")
+                }
+            },
+            projectUpdates = mockk {
+                coEvery { check(any()) } coAnswers {
+                    calls += firstArg<ProjectPackageTarget>().name
+                    false
+                }
+            },
+        )
+        advanceUntilIdle()
+        assertTrue(calls.isEmpty())
+    }
+
+    @Test
+    fun `startup waits for resource result before checking project`() = runTest {
+        val gate = CompletableDeferred<Boolean>()
+        val calls = mutableListOf<ProjectPackageTarget>()
+        viewModel(
+            service = mockk {
+                coEvery { check(any()) } returns UpdateCheckResult.UpToDate(UpdateSource.GITHUB, "1.0.0")
+            },
+            projectUpdates = mockk {
+                coEvery { check(any()) } coAnswers {
+                    val target = firstArg<ProjectPackageTarget>()
+                    calls += target
+                    if (target == ProjectPackageTarget.Resource) gate.await() else false
+                }
+            },
+            settings = FakeAppSettingsGateway().also { it.setAutoCheckUpdate(true) },
+        )
+        advanceUntilIdle()
+        assertEquals(listOf(ProjectPackageTarget.Resource), calls)
+        gate.complete(false)
+        advanceUntilIdle()
+        assertEquals(listOf(ProjectPackageTarget.Resource, ProjectPackageTarget.Project), calls)
+    }
 
     @Test
     fun `startup and manual APK checks both use software github`() = runTest {
@@ -500,6 +597,9 @@ class SettingsViewModelTest {
             )
         },
         settings: AppSettingsGateway = FakeAppSettingsGateway(),
+        projectUpdates: ProjectUpdateManager = mockk {
+            coEvery { check(any()) } returns false
+        },
         metadata: ProjectMetadata = ProjectMetadata(githubRepository = "owner/repo", mirrorchyanRid = "mirror-rid"),
     ): SettingsViewModel {
         val definition = ProjectDefinition(
@@ -522,6 +622,7 @@ class SettingsViewModelTest {
             apkInstaller = mockk {
                 coEvery { install(any()) } returns SystemApkInstaller.Result.Started
             },
+            projectUpdates = projectUpdates,
             currentVersion = "1.0.0",
             supportedAbis = listOf("arm64-v8a"),
         )

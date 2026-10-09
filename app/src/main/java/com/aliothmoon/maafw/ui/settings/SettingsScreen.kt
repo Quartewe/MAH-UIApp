@@ -436,6 +436,11 @@ private fun UpdateCard(
             enabled = settingsEnabled,
             onCheckedChange = { onSettingsIntent(SettingsIntent.SetAutoCheckUpdate(it)) },
         )
+        Text(
+            text = stringResource(R.string.mah_update_startup_order),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         MaaSwitchRow(
             label = stringResource(R.string.settings_update_auto_download),
             checked = update.autoDownloadUpdate,

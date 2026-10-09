@@ -11,6 +11,8 @@ import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.privileged.PermissionGateway
 import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
+import com.aliothmoon.maafw.project.ProjectPackageTarget
+import com.aliothmoon.maafw.update.ProjectUpdateManager
 import com.aliothmoon.maafw.update.AndroidAbi
 import com.aliothmoon.maafw.update.OkHttpUpdateDownloader
 import com.aliothmoon.maafw.update.UpdateCheckFailure
@@ -55,6 +57,7 @@ class SettingsViewModel(
     private val updateService: UpdateService,
     private val updateDownloader: OkHttpUpdateDownloader,
     private val apkInstaller: SystemApkInstaller,
+    private val projectUpdates: ProjectUpdateManager,
     private val currentVersion: String = BuildConfig.VERSION_NAME,
     supportedAbis: List<String> = Build.SUPPORTED_ABIS.orEmpty().toList(),
 ) : ViewModel() {
@@ -177,9 +180,8 @@ class SettingsViewModel(
     }
 
     /**
-     * 启动自检：等设置读盘与 PI 就绪后查一次；VM 存活期内只跑这一回。
-     * 不写 checkResult（首页不出现结果行）；失败照弹错误窗，发现新版本按自动下载开关走
-     * 静默下载或弹「发现新版本」dialog
+     * 启动时依次检查 APK、资源、项目，发现更新就结束本轮，交给对应的更新入口处理。
+     * 等设置与 PI 就绪后只跑一次；APK 沿用自动下载设置，ZIP 更新保留安装入口。
      */
     private suspend fun startupUpdateCheck() {
         appSettings.loaded.first { it }
@@ -205,6 +207,8 @@ class SettingsViewModel(
             updateOperation.update {
                 it.copy(checking = false)
             }
+            if (projectUpdates.check(ProjectPackageTarget.Resource)) return
+            projectUpdates.check(ProjectPackageTarget.Project)
             return
         }
         updateOperation.update { it.copy(checking = false, checkResult = result) }

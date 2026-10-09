@@ -176,8 +176,8 @@
     <string name="settings_update_up_to_date">You are up to date</string>
     <string name="settings_update_no_downloadable_apk">The selected update source has no downloadable APK</string>
     <string name="settings_update_auto_check">Check for updates on launch</string>
-    <string name="settings_update_auto_download">Auto-download updates</string>
-    <string name="settings_update_auto_download_desc">When a new version is found on launch, download it and open the installer automatically</string>
+    <string name="settings_update_auto_download">Auto-download APK updates</string>
+    <string name="settings_update_auto_download_desc">When a new APK version is found on launch, download it and open the installer automatically</string>
     <string name="dialog_update_found_title">Update available</string>
     <string name="dialog_update_error_title">Update check failed</string>
     <string name="dialog_update_failed_title">Update failed</string>

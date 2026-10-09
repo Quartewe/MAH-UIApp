@@ -10,6 +10,7 @@
     <string name="mah_update_check_apk">检查 APK 更新</string>
     <string name="mah_update_apk_source">APK 更新源</string>
     <string name="mah_update_apk_channel">APK 更新渠道</string>
+    <string name="mah_update_startup_order">依次检查 APK、资源、项目；发现更新后停止后续检查</string>
     <string name="mah_update_install">安装 %1$s</string>
     <string name="mah_update_no_package">尚未发布适用于此 App 的更新包</string>
     <string name="mah_update_current">已是最新版本</string>
