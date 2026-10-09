@@ -75,16 +75,17 @@ class UiTextArityTest {
 
     /** 取 `%N$s` 里最大的 N；没有占位符即 0 */
     private fun placeholderCounts(tag: String): Map<String, Int> {
-        val document = DocumentBuilderFactory.newInstance()
-            .newDocumentBuilder()
-            .parse(File("src/main/res/values/strings.xml"))
-        val nodes = document.getElementsByTagName(tag)
         return buildMap {
-            for (i in 0 until nodes.length) {
-                val element = nodes.item(i) as Element
-                val max = PLACEHOLDER.findAll(element.textContent)
-                    .maxOfOrNull { it.groupValues[1].toInt() } ?: 0
-                put(element.getAttribute("name"), max)
+            // Android merges all values/*.xml, including MAH's independent mah.xml.
+            for (file in File("src/main/res/values").listFiles().orEmpty().filter { it.extension == "xml" }) {
+                val document = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(file)
+                val nodes = document.getElementsByTagName(tag)
+                for (i in 0 until nodes.length) {
+                    val element = nodes.item(i) as Element
+                    val max = PLACEHOLDER.findAll(element.textContent)
+                        .maxOfOrNull { it.groupValues[1].toInt() } ?: 0
+                    put(element.getAttribute("name"), max)
+                }
             }
         }
     }

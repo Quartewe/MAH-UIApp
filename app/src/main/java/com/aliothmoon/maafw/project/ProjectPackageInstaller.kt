@@ -15,6 +15,8 @@ data class InstalledProjectPackages(
     val resourceVersion: String = "",
     val revision: String = "",
     val owners: Map<String, Map<String, String>> = emptyMap(),
+    val resourceSizes: Map<String, Long> = emptyMap(),
+    val resourceContentId: String = "",
 )
 
 enum class ProjectPackageTarget { Project, Resource }
@@ -35,6 +37,31 @@ class ProjectPackageInstaller(private val root: File) {
         json.decodeFromString<InstalledProjectPackages>(it.readText())
     } ?: InstalledProjectPackages()
 
+    /** Old installations gain a size inventory only after checking their existing hashes once. */
+    @Synchronized
+    fun resourcesComplete(verifyHashes: Boolean = false): Boolean {
+        val installed = state()
+        val expected = installed.owners["resource"].orEmpty()
+        if (installed.resourceVersion.isBlank() || !hasRequiredResources(expected.keys)) return false
+        val migrate = installed.resourceSizes.keys != expected.keys
+        val sizes = linkedMapOf<String, Long>()
+        for ((name, hash) in expected) {
+            if (!isResourcePath(name)) return false
+            val file = checked(root, name)
+            if (!file.isFile) return false
+            sizes[name] = file.length()
+            if (!migrate && installed.resourceSizes[name] != file.length()) return false
+            if ((migrate || verifyHashes) && !sha256(file).equals(hash, true)) return false
+        }
+        if (migrate) {
+            val temporary = File(root, "$STATE.tmp")
+            durableWrite(temporary, json.encodeToString(installed.copy(resourceSizes = sizes)))
+            java.nio.file.Files.move(temporary.toPath(), File(root, STATE).toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE)
+        }
+        return true
+    }
+
     @Synchronized
     fun recover() {
         if (backup.isDirectory && !committed.isFile) {
@@ -46,6 +73,10 @@ class ProjectPackageInstaller(private val root: File) {
 
     @Synchronized
     fun install(archive: File, target: ProjectPackageTarget, version: String) {
+        if (target == ProjectPackageTarget.Resource) {
+            installResources(listOf(ResourceArchive(archive, version)))
+            return
+        }
         recover()
         check(root.isDirectory) { "Project is not installed" }
         val before = state()
@@ -55,13 +86,9 @@ class ProjectPackageInstaller(private val root: File) {
             val manifest = File(unpacked, MANIFEST).takeIf(File::isFile)?.let {
                 Json.parseToJsonElement(it.readText()).jsonObject
             }
-            val mapped = when (target) {
-                ProjectPackageTarget.Project -> projectFiles(unpacked, requireNotNull(manifest) { "Missing project manifest" }, version)
-                ProjectPackageTarget.Resource -> resourceFiles(unpacked)
-            }
-            val owner = if (target == ProjectPackageTarget.Project) "project" else "resource"
-            val otherOwner = if (owner == "project") "resource" else "project"
-            require(mapped.keys.none { it in before.owners[otherOwner].orEmpty() }) { "Package overlaps another update channel" }
+            val mapped = projectFiles(unpacked, requireNotNull(manifest) { "Missing project manifest" }, version)
+            val owner = "project"
+            require(mapped.keys.none { it in before.owners["resource"].orEmpty() }) { "Package overlaps another update channel" }
             check(root.copyRecursively(candidate, overwrite = true)) { "Cannot stage current project" }
             // Only the previous package's own files may be removed. Runtime paths remain user-owned.
             (before.owners[owner].orEmpty().keys - mapped.keys).filterNot(::mutablePath).forEach {
@@ -73,17 +100,17 @@ class ProjectPackageInstaller(private val root: File) {
                     dest.parentFile!!.mkdirs()
                     file.copyTo(dest, overwrite = true)
                 }
-                sha256(file)
+                val hash = sha256(file)
+                if (!mutablePath(name)) require(sha256(dest) == hash) { "Copied file hash mismatch: $name" }
+                hash
             }
             val installedInterface = checked(candidate, "interface.json")
             val pi = Json.parseToJsonElement(installedInterface.readText()).jsonObject.toMutableMap()
-            if (target == ProjectPackageTarget.Resource) pi["resource_version"] = JsonPrimitive(version)
-            else pi["resource_version"] = JsonPrimitive(before.resourceVersion)
+            pi["resource_version"] = JsonPrimitive(before.resourceVersion)
             installedInterface.writeText(JsonObject(pi).toString())
             validate(candidate)
             val after = before.copy(
-                projectVersion = if (target == ProjectPackageTarget.Project) version else before.projectVersion,
-                resourceVersion = if (target == ProjectPackageTarget.Resource) version else before.resourceVersion,
+                projectVersion = version,
                 revision = UUID.randomUUID().toString(),
                 owners = before.owners + (owner to hashes),
             )
@@ -91,6 +118,106 @@ class ProjectPackageInstaller(private val root: File) {
             check(root.renameTo(backup)) { "Cannot back up installed project" }
             check(candidate.renameTo(root)) { "Cannot activate staged project" }
             durableWrite(committed, after.revision)
+        } catch (error: Exception) {
+            recover()
+            throw error
+        }
+        recover()
+    }
+
+    /** Returns a content identity only for a complete, hash-verified baseline (including legacy installs). */
+    @Synchronized
+    fun verifiedResourceContentId(): String? {
+        if (!resourcesComplete(verifyHashes = true)) return null
+        return resourceContentId(resourceInventory(state()))
+    }
+
+    private fun resourceInventory(installed: InstalledProjectPackages): Map<String, ResourceFile> =
+        installed.owners["resource"].orEmpty().mapKeys { resourceSource(it.key) }.mapValues { (path, hash) ->
+            ResourceFile(installed.resourceSizes[resourceDestination(path)] ?: -1, hash)
+        }
+
+    /** A whole delta chain is staged and committed once; no intermediate version becomes active. */
+    @Synchronized
+    fun installResources(archives: List<ResourceArchive>) {
+        require(archives.isNotEmpty() && archives.size <= 32) { "Invalid resource update chain" }
+        recover()
+        check(root.isDirectory) { "Project is not installed" }
+        var installed = state()
+        try {
+            work.mkdirs()
+            check(root.copyRecursively(candidate, overwrite = true)) { "Cannot stage current project" }
+            for ((index, archive) in archives.withIndex()) {
+                archive.expected?.let {
+                    require(archive.file.length() == it.size && sha256(archive.file) == it.sha256) { "Resource archive digest mismatch" }
+                }
+                val unpacked = File(work, "archive-$index").also { it.mkdirs() }
+                unzip(archive.file, unpacked)
+                val manifestFile = File(unpacked, RESOURCE_MANIFEST)
+                val manifest = if (manifestFile.isFile) readResourceJson<ResourceManifest>(manifestFile).also { it.validate() } else null
+                require(archive.expected == null || manifest == archive.expected.manifest) { "Package manifest differs from release descriptor" }
+                require(manifest == null || manifest.version == archive.version) { "Resource version differs from release" }
+                val payload = unpacked.walkTopDown().filter(File::isFile)
+                    .filter { it != manifestFile }.associateBy { it.relativeTo(unpacked).invariantSeparatorsPath }
+                val targetFiles = manifest?.files ?: resourceFiles(unpacked).mapKeys { resourceSource(it.key) }
+                    .mapValues { ResourceFile(it.value.length(), sha256(it.value)) }
+                val changed = manifest?.changed?.toSet() ?: targetFiles.keys
+                require(payload.keys == changed) { "Resource archive contains missing or unlisted files" }
+                val mappedTarget = targetFiles.mapKeys { resourceDestination(it.key) }
+                val oldFiles = installed.owners["resource"].orEmpty()
+                require(mappedTarget.keys.none { it in installed.owners["project"].orEmpty() }) { "Package overlaps project-owned files" }
+                val removed = oldFiles.keys - mappedTarget.keys
+                if (manifest?.kind == "hotfix") {
+                    require(installed.resourceVersion == manifest.baseVersion) { "Hotfix baseline version mismatch" }
+                    // Old APKs lack sizes. Derive them only while verifying every baseline hash.
+                    val baseline = oldFiles.mapKeys { resourceSource(it.key) }.mapValues { (path, hash) ->
+                        val file = checked(candidate, resourceDestination(path))
+                        require(file.isFile && sha256(file) == hash) { "Hotfix baseline is damaged: $path" }
+                        val recorded = installed.resourceSizes[resourceDestination(path)]
+                        require(recorded == null || recorded == file.length()) { "Hotfix baseline size mismatch: $path" }
+                        ResourceFile(file.length(), hash)
+                    }
+                    require(resourceContentId(baseline) == manifest.baseContentId) { "Hotfix baseline content mismatch" }
+                    require(manifest.deleted.map(::resourceDestination).toSet() == removed) { "Hotfix deletion list mismatch" }
+                    require(changed == targetFiles.filter { (path, entry) -> baseline[path] != entry }.keys) { "Hotfix change list mismatch" }
+                }
+                removed.forEach { path ->
+                    require(isResourcePath(path) && path !in installed.owners["project"].orEmpty()) { "Invalid resource deletion" }
+                    checked(candidate, path).takeIf(File::isFile)?.let { check(it.delete()) }
+                }
+                changed.forEach { path ->
+                    val source = payload.getValue(path)
+                    val entry = targetFiles.getValue(path)
+                    require(source.length() == entry.size && sha256(source) == entry.sha256) { "Resource payload mismatch: $path" }
+                    val dest = checked(candidate, resourceDestination(path))
+                    dest.parentFile!!.mkdirs()
+                    source.copyTo(dest, overwrite = true)
+                }
+                // Verify all target files, including unchanged files, before changing versions.
+                mappedTarget.forEach { (path, entry) ->
+                    val file = checked(candidate, path)
+                    require(file.isFile && file.length() == entry.size && sha256(file) == entry.sha256) { "Incomplete target resources: $path" }
+                }
+                require(hasRequiredResources(mappedTarget.keys)) { "Incomplete resource image archive" }
+                for (name in listOf("ui.json", "characters.json", "ar.json")) {
+                    val value = Json.parseToJsonElement(checked(candidate, "resource/index/$name").readText())
+                    require(value is JsonObject || value is JsonArray) { "Invalid resource index: $name" }
+                }
+                installed = installed.copy(resourceVersion = archive.version,
+                    resourceContentId = resourceContentId(targetFiles),
+                    owners = installed.owners + ("resource" to mappedTarget.mapValues { it.value.sha256 }),
+                    resourceSizes = mappedTarget.mapValues { it.value.size })
+            }
+            val piFile = checked(candidate, "interface.json")
+            val pi = Json.parseToJsonElement(piFile.readText()).jsonObject.toMutableMap()
+            pi["resource_version"] = JsonPrimitive(installed.resourceVersion)
+            piFile.writeText(JsonObject(pi).toString())
+            validate(candidate)
+            installed = installed.copy(revision = UUID.randomUUID().toString())
+            durableWrite(File(candidate, STATE), json.encodeToString(installed))
+            check(root.renameTo(backup)) { "Cannot back up installed project" }
+            check(candidate.renameTo(root)) { "Cannot activate staged project" }
+            durableWrite(committed, installed.revision)
         } catch (error: Exception) {
             recover()
             throw error
@@ -115,7 +242,7 @@ class ProjectPackageInstaller(private val root: File) {
         }
     }
 
-    /** Existing mah_res releases have no baseline/deletion manifest; only full archives are selected. */
+    /** Compatibility path for historical full archives without a resource manifest. */
     private fun resourceFiles(dir: File): Map<String, File> {
         val mappings = mapOf("image/" to "resource/base/image/", "index/" to "resource/index/",
             "model/" to "resource/base/model/", "pipeline/" to "resource/base/pipeline/",
@@ -148,6 +275,14 @@ class ProjectPackageInstaller(private val root: File) {
     companion object {
         const val STATE = ".mah-install.json"
         const val MANIFEST = "mah-package.json"
+        internal fun isResourcePath(name: String): Boolean = listOf(
+            "resource/base/image/", "resource/index/", "resource/base/model/",
+            "resource/base/pipeline/", "resource/announcement/",
+        ).any(name::startsWith)
+        private fun hasRequiredResources(names: Set<String>): Boolean =
+            listOf("ui.json", "characters.json", "ar.json").all { "resource/index/$it" in names } &&
+                names.any { it.startsWith("resource/base/image/character/") } &&
+                names.any { it.startsWith("resource/base/image/ar/") }
         private fun mutablePath(name: String): Boolean = name.startsWith("config/") || name.startsWith("data/") || name.startsWith("debug/")
 
         fun checked(base: File, name: String): File {

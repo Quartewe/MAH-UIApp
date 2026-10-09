@@ -31,6 +31,40 @@ class ProjectPackageInstallerTest {
     private val full = mapOf("image/character/a.png" to "A", "image/ar/b.png" to "B",
         "index/ui.json" to "{}", "index/characters.json" to "{}", "index/ar.json" to "{}")
 
+    @Test fun `inventory detects missing and truncated files and full verification detects same size corruption`() {
+        val dir = root()
+        val installer = ProjectPackageInstaller(dir)
+        assertFalse(installer.resourcesComplete())
+        installer.install(zip(full), ProjectPackageTarget.Resource, "A")
+        assertTrue(installer.resourcesComplete())
+        val image = File(dir, "resource/base/image/character/a.png")
+        image.writeText("X")
+        assertTrue(installer.resourcesComplete())
+        assertFalse(installer.resourcesComplete(verifyHashes = true))
+        image.writeText("")
+        assertFalse(installer.resourcesComplete())
+        image.delete()
+        assertFalse(installer.resourcesComplete())
+        installer.install(zip(full), ProjectPackageTarget.Resource, "A")
+        assertTrue(installer.resourcesComplete(verifyHashes = true))
+        assertEquals("user combat", File(dir, "data/custom.json").readText())
+    }
+
+    @Test fun `legacy inventory is migrated only after matching all existing hashes`() {
+        val dir = root()
+        val installer = ProjectPackageInstaller(dir)
+        installer.install(zip(full), ProjectPackageTarget.Resource, "A")
+        val state = File(dir, ProjectPackageInstaller.STATE)
+        state.writeText(Json.encodeToString(installer.state().copy(resourceSizes = emptyMap())))
+        val image = File(dir, "resource/base/image/character/a.png")
+        image.writeText("X")
+        assertFalse(installer.resourcesComplete())
+        assertTrue(installer.state().resourceSizes.isEmpty())
+        image.writeText("A")
+        assertTrue(installer.resourcesComplete())
+        assertEquals(installer.state().owners["resource"]!!.keys, installer.state().resourceSizes.keys)
+    }
+
     @Test fun `full resources replace only files owned by the resource channel`() {
         val dir = root()
         val installer = ProjectPackageInstaller(dir)
