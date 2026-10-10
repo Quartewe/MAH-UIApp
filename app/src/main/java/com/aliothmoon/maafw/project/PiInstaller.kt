@@ -5,9 +5,12 @@ import com.aliothmoon.maafw.constant.AppFiles
 import com.aliothmoon.maafw.constant.AppPaths
 import java.io.File
 import java.io.FileNotFoundException
+import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.zip.ZipInputStream
 import kotlinx.serialization.json.*
@@ -59,7 +62,7 @@ typealias PiUnpackProgress = (done: Int, total: Int, path: String) -> Unit
  * native MaaFramework 只认文件系统路径，而 APK 内的 assets 条目不是文件；落点不能用 filesDir——
  * 特权进程是 shell 身份，进不去 0700 的 app 私有目录（docs/privileged-runtime.md §9）
  *
- * 标记文件记 versionCode，与本次运行的不符即整体重解
+ * 标记文件记 versionCode；独立管理的项目跨 APK 升级保留，普通项目版本不符时重解
  * 解包只由 [PiInstallCoordinator] 发起；取路径的地方一律用 [installedDir]，别在读一个文件时
  * 顺带搬几十 MB
  */
@@ -70,7 +73,7 @@ class PiInstaller(
 
     /**
      * 已解包的 PI 根目录，本身不解包
-     * 就绪定义与 [ensureInstalled] 相同：目录在、标记与本次 versionCode 一致
+     * 就绪定义与 [ensureInstalled] 相同：标记有效，或已有独立管理的项目
      */
     fun installedDir(): File {
         val target = File(AppPaths.ROOT, AppFiles.PI_DIR)
@@ -81,7 +84,7 @@ class PiInstaller(
     }
 
     /**
-     * 标记与本次运行的 versionCode 一致就直接返回，否则整体重解
+     * 复用有效安装并执行已知元数据迁移；其他情况整体重解
      * 阻塞 IO：调用方须在 IO 线程
      */
     @Synchronized
@@ -90,14 +93,15 @@ class PiInstaller(
         val target = File(base, AppFiles.PI_DIR)
         ProjectPackageInstaller(target).recover()
         recoverBootstrap(base, target)
-        if (isCurrentInstall(base, target)) return target
-        return install(base, onProgress)
+        val installed = if (isCurrentInstall(base, target)) target else install(base, onProgress)
+        migrateLegacyApkSource(installed)
+        return installed
     }
 
     /** 不看标记，无条件重解；设置页的手动重来与失败重试都走这条 */
     @Synchronized
     fun reinstall(onProgress: PiUnpackProgress = NO_PROGRESS): File =
-        install(AppPaths.ROOT, onProgress)
+        install(AppPaths.ROOT, onProgress).also(::migrateLegacyApkSource)
 
     @Synchronized
     fun installUpdate(archive: File, target: ProjectPackageTarget, version: String) =
@@ -108,6 +112,32 @@ class PiInstaller(
         return target.isDirectory && marker.isFile &&
             (marker.readText().trim() == versionCode.toString() ||
                 (File(target, ProjectPackageInstaller.STATE).isFile && File(target, INTERFACE_JSON).isFile))
+    }
+
+    /** Old MAH installations outlive APK upgrades, including their obsolete APK repository. */
+    private fun migrateLegacyApkSource(root: File) {
+        if (!File(root, ProjectPackageInstaller.STATE).isFile) return
+        val file = File(root, INTERFACE_JSON)
+        if (!file.isFile) return
+        val metadata = Json.parseToJsonElement(file.readText()).jsonObject
+        fun repository(key: String): String? = (metadata[key] as? JsonPrimitive)?.contentOrNull
+            ?.trim()?.trimEnd('/')?.removeSuffix(".git")
+        if (!repository("software_github").equals("https://github.com/Quartewe/MAH-UIApp", ignoreCase = true)) return
+        val project = repository("project_github") ?: repository("github")
+        if (!project.equals("https://github.com/Quartewe/MAH", ignoreCase = true)) return
+        val migrated = JsonObject(metadata + ("software_github" to JsonPrimitive("https://github.com/Quartewe/MAH")))
+        // A failed write must leave the old, readable interface in place for the next retry.
+        val temporary = File(root, "$INTERFACE_JSON.apk-source.tmp")
+        try {
+            FileOutputStream(temporary).use { output ->
+                output.write(migrated.toString().toByteArray(Charsets.UTF_8))
+                output.fd.sync()
+            }
+            Files.move(temporary.toPath(), file.toPath(),
+                StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+        } finally {
+            if (temporary.isFile) temporary.delete()
+        }
     }
 
     private fun install(base: File, onProgress: PiUnpackProgress): File {
