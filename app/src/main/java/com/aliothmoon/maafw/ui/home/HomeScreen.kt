@@ -44,6 +44,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.DiagnosticSeverity
@@ -73,6 +74,8 @@ import com.aliothmoon.maafw.ui.components.MaaSwitch
 import com.aliothmoon.maafw.settings.SettingsIntent
 import com.aliothmoon.maafw.settings.UpdatePanelState
 import com.aliothmoon.maafw.ui.components.maaClickable
+import com.aliothmoon.maafw.update.ProjectUpdatesViewModel
+import org.koin.androidx.compose.koinViewModel
 
 /**
  * 首页版面对齐 MaaMeow：概览（含更新区块）-> 资源 -> 运行模式 -> 权限 -> 服务入口 -> 诊断
@@ -140,7 +143,9 @@ private fun OverviewCard(
     state: SessionUiState,
     update: UpdatePanelState,
     onSettingsIntent: (SettingsIntent) -> Unit,
+    projectUpdatesModel: ProjectUpdatesViewModel = koinViewModel(),
 ) {
+    val projectUpdates by projectUpdatesModel.state.collectAsStateWithLifecycle()
     // 分辨率展示用设备真实屏幕尺寸（Misc.getScreenSize），与前后台 / 虚拟屏偏好无关
     val context = LocalContext.current
     val screen = remember(context) { screenSize(context) }
@@ -150,6 +155,9 @@ private fun OverviewCard(
             "${screen.width} × ${screen.height}",
         )
         MaaInfoRow(stringResource(R.string.settings_version), BuildConfig.VERSION_NAME)
+        if (projectUpdates.enabled) {
+            MaaInfoRow(stringResource(R.string.mah_update_resource), projectUpdates.versions.resourceVersion)
+        }
         MaaLabeledControlRow(
             label = stringResource(R.string.home_service_status),
             labelStyle = MaterialTheme.typography.bodyMedium,
@@ -157,7 +165,12 @@ private fun OverviewCard(
             trailing = { ServiceStatusIndicator(status = state.serviceStatus) },
         )
         UpdateSection(update, onSettingsIntent) {
-            ProjectUpdatesSection(locked = state.configurationLocked)
+            ProjectUpdatesSection(
+                locked = state.configurationLocked,
+                state = projectUpdates,
+                onCheck = projectUpdatesModel::check,
+                onInstall = projectUpdatesModel::install,
+            )
         }
     }
 }
