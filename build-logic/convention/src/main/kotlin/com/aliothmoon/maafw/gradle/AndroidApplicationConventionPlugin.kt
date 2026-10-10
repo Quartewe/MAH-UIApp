@@ -70,9 +70,10 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
                 buildConfigField(
                     "String",
                     "MAFW_PROJECT_VERSION",
-                    "\"" + (pinnedVersionName ?: gitParentVersionName()) + "\"",
+                    "\"" + (textSetting("build.projectVersion", "BUILD_PROJECT_VERSION") ?: gitParentVersionName()) + "\"",
                 )
-                buildConfigField("String", "MAFW_APP_VERSION", "\"" + gitOwnVersionName() + "\"")
+                buildConfigField("String", "MAFW_APP_VERSION", "\"" +
+                    (textSetting("build.uiappVersion", "BUILD_UIAPP_VERSION") ?: gitOwnVersionName()) + "\"")
                 // The benchmark build types start from here; debug and release set their own below
                 buildConfigField("String", "MAFW_PACKAGE_ABI", "\"$UNIVERSAL_PACKAGE_ABI\"")
                 buildConfigField("String", "MAFW_FRAMEWORK_VERSION", "\"" + maaFrameworkVersion() + "\"")

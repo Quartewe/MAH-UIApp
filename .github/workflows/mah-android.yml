@@ -1,52 +1,22 @@
-name: MAH Android APK
+name: UIApp release announcement
 
 on:
-  workflow_dispatch:
-    inputs:
-      mah_ref:
-        description: MAH branch or tag
-        default: main
-      resource_ref:
-        description: mah_res branch or tag
-        default: main
-      version:
-        description: APK and embedded project version
-        required: true
-        default: v1.0.1-android.1
+  push:
+    tags: ['v*']
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  announce:
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - name: Publish UIApp release notes
+        uses: softprops/action-gh-release@v2
         with:
-          repository: Quartewe/MAH
-          ref: ${{ inputs.mah_ref }}
-          submodules: recursive
-          fetch-depth: 0
-          path: MAH
-      - uses: actions/checkout@v4
-        with:
-          repository: quartawa/mah_res
-          ref: ${{ inputs.resource_ref }}
-          fetch-depth: 0
-          path: mah_res
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-      - name: Build app
-        env:
-          VERSION: ${{ inputs.version }}
-        run: python scripts/build_mah.py --mah MAH --resources mah_res --abi all --version "$VERSION"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: MAH-Android-APK
-          path: app/build/outputs/apk/debug/*.apk
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          body: |
+            UIApp 内部版本公告。MAH APK 和项目包由 MAH 主仓库构建并发布。
+            安装包：https://github.com/Quartewe/MAH/releases
