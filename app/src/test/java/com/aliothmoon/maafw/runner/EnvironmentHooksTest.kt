@@ -7,6 +7,7 @@ import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.privileged.FakePrivilegedService
 import com.aliothmoon.maafw.privileged.FakePrivilegedServicePort
+import com.aliothmoon.maafw.privileged.PrivilegedServicePort
 import com.aliothmoon.maafw.settings.FakeAppSettingsGateway
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.currentTime
@@ -52,6 +53,46 @@ class EnvironmentHooksTest {
     }
 
     // ── 亮屏解锁 ────────────────────────────────────────────────────
+
+    /** 闹钟冷启动尚无现成连接，但 useService 可以建立连接。 */
+    private fun coldPort(service: FakePrivilegedService): PrivilegedServicePort =
+        object : PrivilegedServicePort by FakePrivilegedServicePort(service) {
+            override fun serviceOrNull(): com.aliothmoon.maafw.RemoteService? = null
+        }
+
+    @Test
+    fun `cold schedule connects before unlocking`() = runTest {
+        val service = FakePrivilegedService()
+        val settings = FakeAppSettingsGateway().apply {
+            wakeUnlockEnabled.value = true
+            wakeCredential.value = "1234"
+        }
+        val result = WakeUnlockHook(coldPort(service), settings).engage(scheduleContext())
+
+        assertTrue(result is EngageResult.Skipped)
+        assertEquals(listOf("1234"), service.unlockCalls)
+    }
+
+    @Test
+    fun `cold schedule samples the screen after connecting`() = runTest {
+        val service = FakePrivilegedService().apply { screenOn = false }
+        val delegate = FakePrivilegedServicePort(service)
+        var connected = false
+        val port = object : PrivilegedServicePort by delegate {
+            override fun serviceOrNull() = if (connected) service else null
+            override suspend fun <R> useService(action: suspend (com.aliothmoon.maafw.RemoteService) -> R): R {
+                connected = true
+                return action(service)
+            }
+        }
+        val result = AutoSleepHook(port).engage(scheduleContext(
+            ScheduleRunOptions(autoSleepAfterTask = true, skipAutoSleepIfAwake = true),
+        ))
+        result.releaseOrNull()!!(RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
+
+        assertTrue(connected)
+        assertEquals(1, service.lockAndSleepCount)
+    }
 
     @Test
     fun `wake unlock is skipped when the switch is off`() = runTest {
