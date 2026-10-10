@@ -86,6 +86,40 @@ python scripts/setup_maa_framework.py
 
 未配置 `pi.profile` 时构建不会失败，只是包里没有资源。Release 签名读 `KEYSTORE_PATH` 等环境变量或 `local.properties`；缺了就打出未签名包。
 
+## MAH 分支的版本与发布
+
+MAH 主仓库负责组装 UIApp、MAH 项目和资源，构建 APK 与 Android 项目 ZIP，并把它们发布到 MAH Release。主分支构建、手动构建与标签发布沿用 MAH 的 `android-apk.yml` 和 `install.yml`；当前工作流沿用 Debug APK 构建方式。
+
+UIApp 推送 `v*` 标签只生成 Release 公告，不构建 APK、不上传安装包或项目包，也不拉取 MAH 与 mah_res。UIApp 标签是内部校验版本，不替换 APK 的 MAH 版本或界面显示版本。发布新 UIApp 后，需要由 MAH 主仓库构建并发布包含该代码的 APK，用户才能安装。
+
+- “检查项目更新”先读取 UIApp 公告 tag，与 APK 内的 UIApp 版本比较。相同时继续检查 MAH 项目 ZIP；不同时从 MAH 更新源检查 APK，APK 与本机版本不同则提示安装并停止。
+- UIApp 公告或 APK 检查失败会继续后续检查。手动检查保留失败提示，启动检查静默继续。
+- 启动自动检查顺序为 APK → 资源 → MAH 项目，发现可用更新即停止。资源也可以独立检查。
+- UIApp、MAH APK 和项目 ZIP 使用同一正式版／公测版渠道。GitHub 正式版取 `/releases/latest`，公测版取 Release 列表中最新的有效版本（含预发布）。比较 tag 是否相同，不按版本号大小阻止切换，也不跳过没有附件的最新 Release 去找旧包。资源更新沿用资源仓库的独立规则。
+- APK 下载和项目包下载均来自 MAH，资源来自 mah_res。更新源选择和 CDK 设置继续生效；UIApp 内部版本公告通过 GitHub 查询。
+- APK 变更后的首次启动会同步版本不同的内置 MAH 项目，包括版本号较低的项目；保留配置、作战列表和独立资源。相同 APK 再次启动会保留之后安装的项目 ZIP。
+
+构建脚本的 `--version` 指定 MAH 版本；UIApp 内部版本默认取当前 UIApp checkout 可达的最近一个 `v*` 标签，无标签时记为 `0.0.0`，也可显式指定：
+
+```bash
+python scripts/build_mah.py --mah ../MAH --resources ../mah_res --version v2.0.1-alpha6 --uiapp-version v1.0.0-alpha1
+```
+
+APK 的 `versionName` 使用 MAH 版本，`MAFW_APP_VERSION` 使用 UIApp 内部版本，安装用 `versionCode` 沿用原来的 Git 计算规则。初始化标记同时记录安装编号与 MAH 版本，保证仅项目版本变化时也能同步内置项目。概况和关于页显示当前安装的 MAH 项目版本，资源版本单独显示。
+
+UIApp 公告工作流不使用签名密钥。MAH 主仓库的云端 Debug APK 使用固定签名，在 MAH 仓库的 Settings → Secrets and variables → Actions 中配置以下 Repository secrets：
+
+| Secret | 内容 |
+|---|---|
+| `ANDROID_KEYSTORE_BASE64` | 密钥库文件的 Base64 内容 |
+| `ANDROID_KEYSTORE_PASSWORD` | 密钥库密码 |
+| `ANDROID_KEY_ALIAS` | 签名条目的别名 |
+| `ANDROID_KEY_PASSWORD` | 签名条目的密码 |
+
+主发布流程会将这四项传给 APK 工作流。工作流还原临时密钥文件，通过 `MAH_CI_DEBUG_SIGNING=true` 开启固定 Debug 签名，并传入 `KEYSTORE_PATH`、`KEYSTORE_PASSWORD`、`KEY_ALIAS`、`KEY_PASSWORD`。缺少 Secrets 时停止构建；出包后核对 APK 证书与密钥库证书一致，再上传产物。临时密钥文件在清理步骤中删除。本地 Debug 沿用自动调试签名，无需配置本地密钥。
+
+已有 MAH 安装中的旧 `software_github`（指向 MAH-UIApp）会迁回 MAH，其他自定义更新源保持不变。
+
 ## 相关项目
 
 - [MaaFramework](https://github.com/MaaXYZ/MaaFramework) — 基于图像识别的自动化框架
