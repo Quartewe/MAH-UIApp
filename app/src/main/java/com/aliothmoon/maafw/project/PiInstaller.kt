@@ -62,14 +62,17 @@ typealias PiUnpackProgress = (done: Int, total: Int, path: String) -> Unit
  * native MaaFramework 只认文件系统路径，而 APK 内的 assets 条目不是文件；落点不能用 filesDir——
  * 特权进程是 shell 身份，进不去 0700 的 app 私有目录（docs/privileged-runtime.md §9）
  *
- * 标记文件记 versionCode；独立管理的项目跨 APK 升级保留，普通项目版本不符时重解
+ * 标记文件记 APK 编号与 MAH 版本；APK 变更时应用版本不同的内置项目，保留资源与用户文件
  * 解包只由 [PiInstallCoordinator] 发起；取路径的地方一律用 [installedDir]，别在读一个文件时
  * 顺带搬几十 MB
  */
 class PiInstaller(
     private val pkg: PiPackage,
     private val versionCode: Int,
+    private val packageVersion: String? = null,
 ) {
+
+    private val installMarker = listOfNotNull(versionCode.toString(), packageVersion).joinToString(":")
 
     /**
      * 已解包的 PI 根目录，本身不解包
@@ -93,9 +96,33 @@ class PiInstaller(
         val target = File(base, AppFiles.PI_DIR)
         ProjectPackageInstaller(target).recover()
         recoverBootstrap(base, target)
-        val installed = if (isCurrentInstall(base, target)) target else install(base, onProgress)
+        val installed = if (isCurrentInstall(base, target) && !hasChangedBundledProject(base, target)) {
+            target
+        } else install(base, onProgress)
         migrateLegacyApkSource(installed)
+        File(base, PI_MARKER_NAME).writeText(installMarker)
         return installed
+    }
+
+    private fun hasChangedBundledProject(base: File, target: File): Boolean {
+        if (File(base, PI_MARKER_NAME).readText().trim() == installMarker) return false
+        val current = ProjectPackageInstaller(target).state().projectVersion
+        val archive = pkg.openArchive()
+        val metadata = if (archive != null) {
+            ZipInputStream(archive).use { zip ->
+                var text: String? = null
+                while (true) {
+                    val entry = zip.nextEntry ?: break
+                    if (entry.name == INTERFACE_JSON) {
+                        text = zip.readBytes().toString(Charsets.UTF_8)
+                        break
+                    }
+                }
+                text ?: throw PiUnpackException("PI archive is missing $INTERFACE_JSON")
+            }
+        } else pkg.open(INTERFACE_JSON).bufferedReader().use { it.readText() }
+        val bundled = Json.parseToJsonElement(metadata).jsonObject["version"]?.jsonPrimitive?.contentOrNull
+        return bundled != null && bundled != current
     }
 
     /** 不看标记，无条件重解；设置页的手动重来与失败重试都走这条 */
@@ -104,13 +131,16 @@ class PiInstaller(
         install(AppPaths.ROOT, onProgress).also(::migrateLegacyApkSource)
 
     @Synchronized
-    fun installUpdate(archive: File, target: ProjectPackageTarget, version: String) =
-        ProjectPackageInstaller(installedDir()).install(archive, target, version)
+    fun installUpdate(archive: File, target: ProjectPackageTarget, version: String) {
+        val root = installedDir()
+        ProjectPackageInstaller(root).install(archive, target, version)
+        migrateLegacyApkSource(root)
+    }
 
     private fun isCurrentInstall(base: File, target: File): Boolean {
         val marker = File(base, PI_MARKER_NAME)
         return target.isDirectory && marker.isFile &&
-            (marker.readText().trim() == versionCode.toString() ||
+            (marker.readText().trim() == installMarker ||
                 (File(target, ProjectPackageInstaller.STATE).isFile && File(target, INTERFACE_JSON).isFile))
     }
 
@@ -186,7 +216,7 @@ class PiInstaller(
             throw PiUnpackException("Cannot activate PI")
         }
         ensureNoMedia(base)
-        marker.writeText(versionCode.toString())
+        marker.writeText(installMarker)
         backup.deleteRecursively()
         File(base, LEGACY_MARKER_NAME).delete()
         return target

@@ -91,6 +91,75 @@ class PiInstallerTest {
     }
 
     @Test
+    fun `new APK applies different bundled project while retaining resources and user files`() {
+        fun bundle(version: String) = MapPiPackage(files + mapOf(
+            "interface.json" to """{"version":"$version"}""",
+            ProjectPackageInstaller.STATE to """{"projectVersion":"$version"}""",
+            "agent/main.py" to version,
+        ))
+        val base = temp.newFolder()
+        val root = installer(base, bundle("v2.0.0"), 11).ensureInstalled()
+        val image = "resource/base/image/character/a.png"
+        File(root, image).apply { parentFile!!.mkdirs(); writeText("resource") }
+        File(root, ProjectPackageInstaller.STATE).writeText(
+            """{"projectVersion":"v2.0.0","resourceVersion":"event-A","owners":{"resource":{"$image":"hash"}},"resourceSizes":{"$image":8}}""",
+        )
+        for (name in listOf("config/config.json", "data/combat.json", "debug/log.txt")) {
+            File(root, name).apply { parentFile!!.mkdirs(); writeText("user") }
+        }
+        installer(base, bundle("v2.0.1"), 12).ensureInstalled()
+        assertEquals("v2.0.1", ProjectPackageInstaller(root).state().projectVersion)
+        assertEquals("v2.0.1", File(root, "agent/main.py").readText())
+        assertEquals("event-A", ProjectPackageInstaller(root).state().resourceVersion)
+        assertEquals("resource", File(root, image).readText())
+        for (name in listOf("config/config.json", "data/combat.json", "debug/log.txt")) {
+            assertEquals("user", File(root, name).readText())
+        }
+        assertEquals("12", File(base, "pi.version").readText())
+        // Installing a different APK applies its bundled project even when the tag is lower.
+        File(root, ProjectPackageInstaller.STATE).writeText("""{"projectVersion":"v2.1.0"}""")
+        File(root, "agent/main.py").writeText("online update")
+        val older = bundle("v2.0.2")
+        val newerApk = installer(base, older, 13)
+        newerApk.ensureInstalled()
+        val reads = older.openCount
+        newerApk.ensureInstalled()
+        assertEquals(reads, older.openCount)
+        assertEquals("v2.0.2", File(root, "agent/main.py").readText())
+        assertEquals("13", File(base, "pi.version").readText())
+    }
+
+    @Test
+    fun `MAH version change refreshes bundled project even with the same Android code`() {
+        val base = temp.newFolder()
+        every { AppPaths.ROOT } returns base
+        fun bundle(version: String) = MapPiPackage(mapOf(
+            "interface.json" to """{"version":"$version"}""",
+            ProjectPackageInstaller.STATE to """{"projectVersion":"$version"}""",
+            "agent/main.py" to version,
+        ))
+        val root = PiInstaller(bundle("v2.0.0"), 42, "v2.0.0").ensureInstalled()
+        PiInstaller(bundle("v2.0.1"), 42, "v2.0.1").ensureInstalled()
+        assertEquals("v2.0.1", ProjectPackageInstaller(root).state().projectVersion)
+        assertEquals("v2.0.1", File(root, "agent/main.py").readText())
+        assertEquals("42:v2.0.1", File(base, "pi.version").readText())
+    }
+
+    @Test
+    fun `APK archive is compared before applying a bundled project update`() {
+        val base = temp.newFolder()
+        fun bundle(version: String) = ZipPiPackage(mapOf(
+            "interface.json" to """{"version":"$version"}""",
+            ProjectPackageInstaller.STATE to """{"projectVersion":"$version"}""",
+            "agent/main.py" to version,
+        ))
+        val root = installer(base, bundle("v2.0.0"), 11).ensureInstalled()
+        installer(base, bundle("v2.0.1-alpha4"), 12).ensureInstalled()
+        assertEquals("v2.0.1-alpha4", ProjectPackageInstaller(root).state().projectVersion)
+        assertEquals("v2.0.1-alpha4", File(root, "agent/main.py").readText())
+    }
+
+    @Test
     fun `首次解包产出完整目录树并写下标记`() {
         val base = temp.newFolder("external")
         val root = installer(base, MapPiPackage(files), 11).ensureInstalled()

@@ -43,30 +43,28 @@ class PiUpdateSourceMigrationTest {
         .associate { it.relativeTo(root).invariantSeparatorsPath to it.readText() }
 
     @Test fun `retained legacy project migrates only APK source even when version marker already matches`() {
-        for (version in listOf(347, 387)) {
-            val root = installed()
-            val before = snapshot(root)
-            val installer = PiInstaller(noUnpack, version)
-            assertEquals(root, installer.ensureInstalled())
-            val expected = Json.parseToJsonElement(legacy).jsonObject.toMutableMap().apply {
-                put("software_github", JsonPrimitive("https://github.com/Quartewe/MAH"))
-            }
-            val interfaceFile = File(root, "interface.json")
-            assertEquals(JsonObject(expected), Json.parseToJsonElement(interfaceFile.readText()))
-            assertEquals(before - "interface.json", snapshot(root) - "interface.json")
-            assertEquals("347", File(root.parentFile, "pi.version").readText())
-            interfaceFile.setLastModified(1_000L)
-            val modified = interfaceFile.lastModified()
-            installer.ensureInstalled()
-            assertEquals("Migration must be idempotent", modified, interfaceFile.lastModified())
+        val root = installed()
+        val before = snapshot(root)
+        val installer = PiInstaller(noUnpack, 347)
+        assertEquals(root, installer.ensureInstalled())
+        val expected = Json.parseToJsonElement(legacy).jsonObject.toMutableMap().apply {
+            put("software_github", JsonPrimitive("https://github.com/Quartewe/MAH"))
         }
+        val interfaceFile = File(root, "interface.json")
+        assertEquals(JsonObject(expected), Json.parseToJsonElement(interfaceFile.readText()))
+        assertEquals(before - "interface.json", snapshot(root) - "interface.json")
+        assertEquals("347", File(root.parentFile, "pi.version").readText())
+        interfaceFile.setLastModified(1_000L)
+        val modified = interfaceFile.lastModified()
+        installer.ensureInstalled()
+        assertEquals("Migration must be idempotent", modified, interfaceFile.lastModified())
     }
 
     @Test fun `custom sources unrelated projects and unmanaged bundles remain untouched`() {
         val cases = listOf(
-            legacy.replace("Quartewe/MAH-UIApp", "example/custom-app") to true,
-            legacy.replace("Quartewe/MAH\"", "example/other-project\"") to true,
-            legacy.replace("Quartewe/MAH-UIApp", "Quartewe/MAH") to true,
+            legacy.replace("\"software_github\":\"https://github.com/Quartewe/MAH-UIApp\"", "\"software_github\":\"https://github.com/example/custom-app\"") to true,
+            legacy.replace("\"project_github\":\"https://github.com/Quartewe/MAH\"", "\"project_github\":\"https://github.com/example/other-project\"") to true,
+            legacy.replace("\"software_github\":\"https://github.com/Quartewe/MAH-UIApp\"", "\"software_github\":\"https://github.com/Quartewe/MAH\"") to true,
             legacy to false,
         )
         for ((metadata, managed) in cases) {
@@ -77,9 +75,25 @@ class PiUpdateSourceMigrationTest {
         }
     }
 
+    @Test fun `first launch of new APK migrates source while retaining an equal project and user files`() {
+        val root = installed()
+        val before = snapshot(root)
+        val bundle = object : PiPackage {
+            override fun manifest(): List<String> = error("The equal project must not be unpacked")
+            override fun open(path: String) = legacy.byteInputStream()
+        }
+        PiInstaller(bundle, 1_000_001).ensureInstalled()
+        assertEquals(before - "interface.json", snapshot(root) - "interface.json")
+        assertEquals("1000001", File(root.parentFile, "pi.version").readText())
+        assertEquals("https://github.com/Quartewe/MAH",
+            Json.parseToJsonElement(File(root, "interface.json").readText()).jsonObject["software_github"]?.jsonPrimitive?.content)
+        // Subsequent launches no longer even inspect the bundled project.
+        PiInstaller(noUnpack, 1_000_001).ensureInstalled()
+    }
+
     @Test fun `legacy repository URL accepts case trailing slash and git suffix`() {
         val root = installed(legacy.replace("https://github.com/Quartewe/MAH-UIApp", "https://github.com/quartewe/mah-uiapp.git/"))
-        PiInstaller(noUnpack, 387).ensureInstalled()
+        PiInstaller(noUnpack, 347).ensureInstalled()
         assertEquals("https://github.com/Quartewe/MAH",
             Json.parseToJsonElement(File(root, "interface.json").readText()).jsonObject["software_github"]?.jsonPrimitive?.content)
     }
@@ -88,7 +102,7 @@ class PiUpdateSourceMigrationTest {
         val root = installed()
         val temporary = File(root, "interface.json.apk-source.tmp").apply { mkdirs() }
         val blocker = File(temporary, "blocker").apply { writeText("blocked") }
-        val installer = PiInstaller(noUnpack, 387)
+        val installer = PiInstaller(noUnpack, 347)
         assertThrows(java.io.IOException::class.java) { installer.ensureInstalled() }
         assertEquals(legacy, File(root, "interface.json").readText())
         assertTrue(blocker.delete())
