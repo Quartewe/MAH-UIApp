@@ -25,6 +25,9 @@ import com.aliothmoon.maafw.update.UpdateResolveResult
 import com.aliothmoon.maafw.update.UpdateService
 import com.aliothmoon.maafw.update.UpdateSource
 import io.mockk.coEvery
+import io.mockk.every
+import io.mockk.just
+import io.mockk.Runs
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
@@ -52,6 +55,107 @@ class SettingsViewModelTest {
     private val dispatcher = UnconfinedTestDispatcher()
 
     @Test
+    fun `default APK comparison uses MAH application version`() = runTest {
+        var compared: String? = null
+        val model = SettingsViewModel(
+            permissionGateway = FakePermissionGateway(),
+            appSettings = FakeAppSettingsGateway(),
+            projectRepository = FakeProjectRepository(),
+            updateService = mockk {
+                coEvery { check(any()) } coAnswers {
+                    compared = firstArg<UpdateCheckRequest>().currentVersion
+                    UpdateCheckResult.UpToDate(UpdateSource.GITHUB, compared.orEmpty())
+                }
+            },
+            updateDownloader = mockk(),
+            apkInstaller = mockk(),
+            projectUpdates = mockk { every { clear(any()) } just Runs },
+            abi = AndroidAbi.ARM64,
+        )
+        model.onIntent(SettingsIntent.CheckUpdate)
+        advanceUntilIdle()
+        assertEquals(com.aliothmoon.maafw.BuildConfig.VERSION_NAME, compared)
+    }
+
+    @Test
+    fun `manual project check uses UIApp first then project with selected channel only`() = runTest {
+        val calls = mutableListOf<String>()
+        val settings = FakeAppSettingsGateway().also {
+            it.setUpdateChannel(UpdateChannel.BETA)
+            it.setUpdateSource(UpdateSource.GITHUB)
+        }
+        val model = viewModel(
+            settings = settings,
+            metadata = ProjectMetadata(softwareRepository = "Quartewe/MAH", projectRepository = "Quartewe/MAH"),
+            service = mockk {
+                coEvery { check(any()) } coAnswers {
+                    val request = firstArg<UpdateCheckRequest>()
+                    assertEquals(UpdateSource.GITHUB, request.source)
+                    assertEquals(UpdateChannel.BETA, request.channel)
+                    assertEquals(com.aliothmoon.maafw.BuildConfig.MAFW_APP_VERSION, request.uiappVersion)
+                    calls += request.githubRepository.orEmpty()
+                    UpdateCheckResult.UpToDate(UpdateSource.GITHUB, "1.0.0")
+                }
+            },
+            projectUpdates = mockk {
+                coEvery { check(any(), any()) } coAnswers {
+                    assertEquals(UpdateChannel.BETA, secondArg<UpdateChannel>())
+                    calls += firstArg<ProjectPackageTarget>().name
+                    false
+                }
+            },
+        )
+        model.onIntent(SettingsIntent.CheckUpdate)
+        advanceUntilIdle()
+        assertEquals(listOf("Quartewe/MAH", "Project"), calls)
+    }
+
+    @Test
+    fun `failed manual APK check continues to project`() = runTest {
+        val calls = mutableListOf<ProjectPackageTarget>()
+        val model = viewModel(
+            metadata = ProjectMetadata(projectRepository = "Quartewe/MAH"),
+            service = mockk {
+                coEvery { check(any()) } returns UpdateCheckResult.SourceFailed(UpdateSource.GITHUB, UpdateCheckFailure.HTTP)
+            },
+            projectUpdates = mockk {
+                coEvery { check(any(), any()) } coAnswers { calls += firstArg<ProjectPackageTarget>(); false }
+            },
+        )
+        model.onIntent(SettingsIntent.CheckUpdate)
+        advanceUntilIdle()
+        assertEquals(listOf(ProjectPackageTarget.Project), calls)
+        assertNotNull(latestPanel(model).errorPrompt)
+        assertFalse(latestPanel(model).checking)
+    }
+
+    @Test
+    fun `failed startup APK check continues until an available resource or project`() = runTest {
+        for (resourceAvailable in listOf(false, true)) {
+            val calls = mutableListOf<ProjectPackageTarget>()
+            val model = viewModel(
+                settings = FakeAppSettingsGateway().also { it.setAutoCheckUpdate(true) },
+                metadata = ProjectMetadata(projectRepository = "Quartewe/MAH"),
+                service = mockk {
+                    coEvery { check(any()) } returns UpdateCheckResult.SourceFailed(UpdateSource.GITHUB, UpdateCheckFailure.HTTP)
+                },
+                projectUpdates = mockk {
+                    coEvery { check(any(), any()) } coAnswers {
+                        val target = firstArg<ProjectPackageTarget>()
+                        calls += target
+                        target == ProjectPackageTarget.Resource && resourceAvailable
+                    }
+                },
+            )
+            advanceUntilIdle()
+            assertEquals(if (resourceAvailable) listOf(ProjectPackageTarget.Resource)
+                else listOf(ProjectPackageTarget.Resource, ProjectPackageTarget.Project), calls)
+            assertNull(latestPanel(model).errorPrompt)
+            assertFalse(latestPanel(model).checking)
+        }
+    }
+
+    @Test
     fun `startup checks APK then resource then project when all are current`() = runTest {
         val calls = mutableListOf<String>()
         viewModel(
@@ -62,12 +166,13 @@ class SettingsViewModelTest {
                 }
             },
             projectUpdates = mockk {
-                coEvery { check(any()) } coAnswers {
+                coEvery { check(any(), any()) } coAnswers {
                     calls += firstArg<ProjectPackageTarget>().name
                     false
                 }
             },
             settings = FakeAppSettingsGateway().also { it.setAutoCheckUpdate(true) },
+            metadata = ProjectMetadata(projectRepository = "owner/project"),
         )
         advanceUntilIdle()
         assertEquals(listOf("APK", "Resource", "Project"), calls)
@@ -87,13 +192,14 @@ class SettingsViewModelTest {
                     }
                 },
                 projectUpdates = mockk {
-                    coEvery { check(any()) } coAnswers {
+                    coEvery { check(any(), any()) } coAnswers {
                         val target = firstArg<ProjectPackageTarget>().name
                         calls += target
                         target == available
                     }
                 },
                 settings = FakeAppSettingsGateway().also { it.setAutoCheckUpdate(true) },
+                metadata = ProjectMetadata(projectRepository = "owner/project"),
             )
             advanceUntilIdle()
             val order = listOf("APK", "Resource", "Project")
@@ -112,7 +218,7 @@ class SettingsViewModelTest {
                 }
             },
             projectUpdates = mockk {
-                coEvery { check(any()) } coAnswers {
+                coEvery { check(any(), any()) } coAnswers {
                     calls += firstArg<ProjectPackageTarget>().name
                     false
                 }
@@ -131,13 +237,14 @@ class SettingsViewModelTest {
                 coEvery { check(any()) } returns UpdateCheckResult.UpToDate(UpdateSource.GITHUB, "1.0.0")
             },
             projectUpdates = mockk {
-                coEvery { check(any()) } coAnswers {
+                coEvery { check(any(), any()) } coAnswers {
                     val target = firstArg<ProjectPackageTarget>()
                     calls += target
                     if (target == ProjectPackageTarget.Resource) gate.await() else false
                 }
             },
             settings = FakeAppSettingsGateway().also { it.setAutoCheckUpdate(true) },
+            metadata = ProjectMetadata(projectRepository = "owner/project"),
         )
         advanceUntilIdle()
         assertEquals(listOf(ProjectPackageTarget.Resource), calls)
@@ -599,10 +706,11 @@ class SettingsViewModelTest {
         },
         settings: AppSettingsGateway = FakeAppSettingsGateway(),
         projectUpdates: ProjectUpdateManager = mockk {
-            coEvery { check(any()) } returns false
+            coEvery { check(any(), any()) } returns false
         },
         metadata: ProjectMetadata = ProjectMetadata(githubRepository = "owner/repo", mirrorchyanRid = "mirror-rid"),
     ): SettingsViewModel {
+        every { projectUpdates.clear(any()) } just Runs
         val definition = ProjectDefinition(
             name = "demo",
             version = "1",

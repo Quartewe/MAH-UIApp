@@ -79,16 +79,18 @@ private fun UpdateRowLabel(text: String) {
 }
 
 /**
- * 概览卡里的更新区块：APK 更新设置、项目与资源入口、APK 检查与下载；
+ * 概览卡里的更新区块：项目更新先查 APK 再查项目 ZIP，资源保留独立入口；
  * 启动自检与自动下载两个开关留在设置页的更新卡
  */
 @Composable
 internal fun UpdateSection(
     update: UpdatePanelState,
     onSettingsIntent: (SettingsIntent) -> Unit,
-    projectUpdates: @Composable () -> Unit,
+    locked: Boolean,
+    projectStatus: @Composable () -> Unit,
+    resourceUpdates: @Composable () -> Unit,
 ) {
-    val settingsEnabled = !update.downloading
+    val settingsEnabled = !locked && !update.downloading && !update.checking
     var mirrorInfoVisible by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -126,7 +128,7 @@ internal fun UpdateSection(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
     ) {
-        UpdateRowLabel(stringResource(R.string.mah_update_apk_channel))
+        UpdateRowLabel(stringResource(R.string.settings_update_channel))
         Spacer(Modifier.weight(1f))
         listOf(
             UpdateChannel.STABLE to stringResource(R.string.settings_update_channel_stable),
@@ -141,14 +143,13 @@ internal fun UpdateSection(
             )
         }
     }
-    projectUpdates()
     UpdateStatus(update)
     if (update.downloading) {
         DownloadProgressRow(update, onSettingsIntent)
     } else {
         MaaOutlinedButton(
             onClick = { onSettingsIntent(SettingsIntent.CheckUpdate) },
-            enabled = !update.checking,
+            enabled = settingsEnabled,
             modifier = Modifier.fillMaxWidth(),
             // 描边款 + 主色内容；整块填充在概览卡里太重
             colors = ButtonDefaults.outlinedButtonColors(
@@ -174,11 +175,13 @@ internal fun UpdateSection(
             Text(
                 text = stringResource(
                     if (update.checking) R.string.settings_update_checking
-                    else R.string.mah_update_check_apk,
+                    else R.string.mah_update_check_project,
                 ),
             )
         }
     }
+    projectStatus()
+    resourceUpdates()
     if (mirrorInfoVisible) {
         MirrorInfoDialog(onDismiss = { mirrorInfoVisible = false })
     }

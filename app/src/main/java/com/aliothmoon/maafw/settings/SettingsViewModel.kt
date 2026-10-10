@@ -83,6 +83,7 @@ class SettingsViewModel(
                             abi = abi,
                             mirrorchyanRid = mirrorchyanRid(metadata),
                             githubRepository = metadata?.softwareRepository ?: metadata?.githubRepository,
+                            uiappVersion = BuildConfig.MAFW_APP_VERSION.takeIf { isMah(metadata) },
                         ),
                     )
                 }
@@ -136,6 +137,8 @@ class SettingsViewModel(
             is SettingsIntent.SetUpdateChannel -> viewModelScope.launch {
                 if (updateSettingsLocked()) return@launch
                 appSettings.setUpdateChannel(intent.channel)
+                projectUpdates.clear(ProjectPackageTarget.Project)
+                updateOperation.update { it.copy(checkResult = null, updatePrompt = null) }
             }
 
             is SettingsIntent.SetUpdateSource -> viewModelScope.launch {
@@ -178,71 +181,59 @@ class SettingsViewModel(
         }
     }
 
-    /**
-     * 启动时依次检查 APK、资源、项目，发现更新就结束本轮，交给对应的更新入口处理。
-     * 等设置与 PI 就绪后只跑一次；APK 沿用自动下载设置，ZIP 更新保留安装入口。
-     */
+    /** One entry: check the APK, then continue to package checks unless an APK is available. */
     private suspend fun startupUpdateCheck() {
         appSettings.loaded.first { it }
         if (!appSettings.autoCheckUpdate.value) return
-        val metadata = projectRepository.state.filterIsInstance<ProjectState.Ready>()
-            .first().definition.metadata
-        if (updateOperation.value.checking || updateOperation.value.downloading) return
-        updateOperation.update { it.copy(checking = true) }
-        val result = updateService.check(
-            UpdateCheckRequest(
-                source = appSettings.updateSource.value,
-                currentVersion = currentVersion,
-                channel = appSettings.updateChannel.value,
-                abi = abi,
-                mirrorchyanRid = mirrorchyanRid(metadata),
-                githubRepository = metadata.softwareRepository ?: metadata.githubRepository,
-            ),
-        )
-        val available = result as? UpdateCheckResult.UpdateAvailable
-        if (available == null) {
-            Timber.tag("UpdateCheck").w("startup check found no update: %s", result)
-            updateOperation.update {
-                it.copy(checking = false)
-            }
-            if (projectUpdates.check(ProjectPackageTarget.Resource)) return
-            projectUpdates.check(ProjectPackageTarget.Project)
-            return
-        }
-        updateOperation.update { it.copy(checking = false, checkResult = result) }
-        if (appSettings.autoDownloadUpdate.value) {
-            downloadUpdate()
-        } else {
-            updateOperation.update { it.copy(updatePrompt = available) }
-        }
+        projectRepository.state.filterIsInstance<ProjectState.Ready>().first()
+        checkUpdate(startup = true)
     }
 
-    private suspend fun checkUpdate() {
+    private suspend fun checkUpdate(startup: Boolean = false) {
         if (updateOperation.value.checking || updateOperation.value.downloading) return
         updateOperation.update {
-            it.copy(checking = true, checkResult = null, errorMessage = null, errorPrompt = null)
+            it.copy(checking = true, checkResult = null, updatePrompt = null, errorMessage = null, errorPrompt = null)
         }
-        val metadata = projectMetadata()
-        // checker 内部已把非取消异常吞成 SourceFailed，这里不需要再兜一层
-        val result = updateService.check(
-            UpdateCheckRequest(
-                source = appSettings.updateSource.value,
-                currentVersion = currentVersion,
-                channel = appSettings.updateChannel.value,
-                abi = abi,
-                mirrorchyanRid = mirrorchyanRid(metadata),
-                githubRepository = metadata?.softwareRepository ?: metadata?.githubRepository,
-            ),
-        )
-        // 错误与更新走同一种呈现（弹窗），二者天然互斥：失败不可能同时是 UpdateAvailable
-        updateOperation.update {
-            it.copy(
-                checking = false,
-                checkResult = result,
-                errorPrompt = result.message()?.let(UpdateErrorPrompt::check),
-                updatePrompt = result as? UpdateCheckResult.UpdateAvailable,
+        var downloadApk = false
+        try {
+            projectUpdates.clear(ProjectPackageTarget.Project)
+            val metadata = projectMetadata()
+            val result = updateService.check(
+                UpdateCheckRequest(
+                    source = appSettings.updateSource.value,
+                    currentVersion = currentVersion,
+                    channel = appSettings.updateChannel.value,
+                    abi = abi,
+                    mirrorchyanRid = mirrorchyanRid(metadata),
+                    githubRepository = metadata?.softwareRepository ?: metadata?.githubRepository,
+                    uiappVersion = BuildConfig.MAFW_APP_VERSION.takeIf { isMah(metadata) },
+                ),
             )
+            when (result) {
+                is UpdateCheckResult.UpdateAvailable -> {
+                    downloadApk = startup && appSettings.autoDownloadUpdate.value
+                    updateOperation.update {
+                        it.copy(checkResult = result, updatePrompt = if (downloadApk) null else result)
+                    }
+                }
+                else -> {
+                    if (result is UpdateCheckResult.SourceFailed && !startup) {
+                        updateOperation.update {
+                            it.copy(checkResult = result, errorPrompt = result.message()?.let(UpdateErrorPrompt::check))
+                        }
+                    }
+                    if (startup && projectUpdates.check(ProjectPackageTarget.Resource)) return
+                    if (metadata?.projectRepository != null) {
+                        projectUpdates.check(ProjectPackageTarget.Project, appSettings.updateChannel.value)
+                    } else if (!startup && result is UpdateCheckResult.UpToDate) {
+                        updateOperation.update { it.copy(checkResult = result) }
+                    }
+                }
+            }
+        } finally {
+            updateOperation.update { it.copy(checking = false) }
         }
+        if (downloadApk) downloadUpdate()
     }
 
     /** CAS 占 downloading 位；连点与启动自检/手动并发抢不到位就静默放弃 */
@@ -259,7 +250,7 @@ class SettingsViewModel(
         return if (updateOperation.compareAndSet(current, claimed)) requested else null
     }
 
-    private fun updateSettingsLocked(): Boolean = updateOperation.value.downloading
+    private fun updateSettingsLocked(): Boolean = updateOperation.value.checking || updateOperation.value.downloading
 
     private suspend fun downloadUpdate() {
         // 二次触发（连点、启动自检与手动并发）不上错，CAS 抢不到位就静默快速返回
@@ -297,6 +288,7 @@ class SettingsViewModel(
                     mirrorchyanRid = mirrorchyanRid(metadata),
                     mirrorchyanCdk = cdk.takeIf(String::isNotBlank),
                     githubRepository = metadata?.softwareRepository ?: metadata?.githubRepository,
+                    useLatestRelease = isMah(metadata),
                 ),
             )) {
                 is UpdateResolveResult.Resolved -> resolved.update
@@ -351,6 +343,9 @@ class SettingsViewModel(
     /** profile 钉的压过 PI 声明的：出包方知道自己发到哪个项目，PI 作者不一定知道 */
     private fun mirrorchyanRid(metadata: ProjectMetadata?): String? =
         BuildConfig.MAFW_MIRRORCHYAN_RID.takeIf(String::isNotBlank) ?: metadata?.mirrorchyanRid
+
+    private fun isMah(metadata: ProjectMetadata?): Boolean =
+        metadata?.softwareRepository.equals("Quartewe/MAH", ignoreCase = true)
 
     private fun projectMetadata(): ProjectMetadata? =
         (projectRepository.state.value as? ProjectState.Ready)?.definition?.metadata

@@ -26,15 +26,13 @@ import com.aliothmoon.maafw.update.ProjectUpdatesState
 internal fun ProjectUpdatesSection(
     locked: Boolean,
     state: ProjectUpdatesState,
+    target: ProjectPackageTarget,
+    showCheck: Boolean = true,
     onCheck: (ProjectPackageTarget) -> Unit,
     onInstall: (ProjectPackageTarget) -> Unit,
 ) {
     if (!state.enabled) return
-    Text(stringResource(R.string.mah_update_source))
-    for ((target, label) in listOf(
-        ProjectPackageTarget.Project to R.string.mah_update_check_project,
-        ProjectPackageTarget.Resource to R.string.mah_update_check_resource,
-    )) {
+    if (showCheck) {
         MaaOutlinedButton(
             enabled = !locked && !state.busy,
             onClick = { onCheck(target) },
@@ -49,17 +47,17 @@ internal fun ProjectUpdatesSection(
                 modifier = Modifier.size(MaaDesignTokens.IconSize.md),
             )
             Spacer(Modifier.width(MaaDesignTokens.Spacing.sm))
-            Text(stringResource(label))
+            Text(stringResource(R.string.mah_update_check_resource))
         }
-        val entry = state.entries[target]
-        entry?.candidate?.let { candidate ->
-            TextButton(enabled = !locked && !state.busy, onClick = { onInstall(target) }) {
-                Text(stringResource(R.string.mah_update_install, candidate.update.version))
-            }
-        }
-        if (state.activeTarget == target) {
-            state.progress?.let { LinearProgressIndicator(progress = { it }) } ?: LinearProgressIndicator()
-        }
-        entry?.message?.let { Text(it.asString()) }
     }
+    val entry = state.entries[target]
+    entry?.candidate?.let { candidate ->
+        TextButton(enabled = !locked && !state.busy, onClick = { onInstall(target) }) {
+            Text(stringResource(R.string.mah_update_install, candidate.update.version))
+        }
+    }
+    if (state.activeTarget == target) {
+        state.progress?.let { LinearProgressIndicator(progress = { it }) } ?: LinearProgressIndicator()
+    }
+    entry?.message?.let { Text(it.asString()) }
 }

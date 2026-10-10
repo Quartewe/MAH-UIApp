@@ -37,6 +37,7 @@ fun UpdatePromptDialog(
     update: UpdatePanelState,
     onDownload: () -> Unit,
     onDismiss: () -> Unit,
+    showVersion: Boolean = true,
 ) {
     val prompt = update.updatePrompt ?: return
     // 没有更新说明时整个正文槽给 null：给个空 lambda 的话 AlertDialog 照样把那段留白撑出来
@@ -71,7 +72,8 @@ fun UpdatePromptDialog(
                     modifier = Modifier.size(MaaDesignTokens.IconSize.md),
                 )
                 Text(
-                    text = "${stringResource(R.string.dialog_update_found_title)} ${prompt.info.version}",
+                    text = stringResource(R.string.dialog_update_found_title) +
+                        if (showVersion) " ${prompt.info.version}" else "",
                     color = MaterialTheme.colorScheme.primary,
                 )
             }

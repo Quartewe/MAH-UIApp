@@ -53,6 +53,7 @@ import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.privileged.SystemPermission
 import com.aliothmoon.maafw.project.ProjectState
+import com.aliothmoon.maafw.project.ProjectPackageTarget
 import com.aliothmoon.maafw.privileged.PrivilegedServiceState
 import com.aliothmoon.maafw.session.ServiceStatus
 import com.aliothmoon.maafw.session.SessionIntent
@@ -154,7 +155,9 @@ private fun OverviewCard(
             stringResource(R.string.home_display_resolution),
             "${screen.width} × ${screen.height}",
         )
-        MaaInfoRow(stringResource(R.string.settings_version), BuildConfig.VERSION_NAME)
+        MaaInfoRow(stringResource(R.string.settings_version),
+            (state.projectState as? ProjectState.Ready)
+                ?.definition?.version?.takeIf(String::isNotBlank) ?: BuildConfig.VERSION_NAME)
         if (projectUpdates.enabled) {
             MaaInfoRow(stringResource(R.string.mah_update_resource), projectUpdates.versions.resourceVersion)
         }
@@ -164,10 +167,24 @@ private fun OverviewCard(
             labelColor = MaterialTheme.colorScheme.onSurface,
             trailing = { ServiceStatusIndicator(status = state.serviceStatus) },
         )
-        UpdateSection(update, onSettingsIntent) {
+        UpdateSection(
+            update, onSettingsIntent,
+            locked = state.configurationLocked || projectUpdates.busy,
+            projectStatus = {
+                ProjectUpdatesSection(
+                    locked = state.configurationLocked || update.checking || update.downloading,
+                    state = projectUpdates,
+                    target = ProjectPackageTarget.Project,
+                    showCheck = false,
+                    onCheck = projectUpdatesModel::check,
+                    onInstall = projectUpdatesModel::install,
+                )
+            },
+        ) {
             ProjectUpdatesSection(
-                locked = state.configurationLocked,
+                locked = state.configurationLocked || update.checking || update.downloading,
                 state = projectUpdates,
+                target = ProjectPackageTarget.Resource,
                 onCheck = projectUpdatesModel::check,
                 onInstall = projectUpdatesModel::install,
             )

@@ -56,6 +56,7 @@ import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.domain.ThemeMode
 import com.aliothmoon.maafw.i18n.AppLocales
 import com.aliothmoon.maafw.i18n.asString
+import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.runner.ResolutionPreference
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionUiState
@@ -534,19 +535,10 @@ private fun AboutCard(state: SessionUiState) {
 
     MaaCard(title = stringResource(R.string.settings_about), collapsible = true) {
         MaaInfoRow(stringResource(R.string.settings_project), appLabel)
-        // 空串 = 非子模块又没钉版本名，此时它和下面那行同值，不重复显示
-        if (BuildConfig.MAFW_PROJECT_VERSION.isNotEmpty()) {
-            MaaInfoRow(
-                label = stringResource(R.string.settings_version_of, appLabel),
-                value = BuildConfig.MAFW_PROJECT_VERSION,
-            )
-        }
         MaaInfoRow(
-            label = stringResource(
-                R.string.settings_version_of,
-                stringResource(R.string.app_name),
-            ),
-            value = BuildConfig.MAFW_APP_VERSION,
+            label = stringResource(R.string.settings_version_of, appLabel),
+            value = (state.projectState as? ProjectState.Ready)?.definition?.version
+                ?.takeIf(String::isNotBlank) ?: BuildConfig.VERSION_NAME,
         )
         if (BuildConfig.MAFW_FRAMEWORK_VERSION.isNotEmpty()) {
             MaaInfoRow(
