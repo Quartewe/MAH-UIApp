@@ -107,8 +107,8 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
                 }
             }
 
-            // Without a keystore the release stays unsigned, so a local build never fails
-            // just for missing signing material
+            // Release signing keeps its existing configuration. MAH's workflow can
+            // explicitly reuse it for Debug; local Debug keeps Android's default key.
             val keystorePath = signingSetting("KEYSTORE_PATH", "KEYSTORE_PATH")
             val releaseSigning = android.signingConfigs.create("release").apply {
                 if (keystorePath.isNotEmpty()) {
@@ -163,6 +163,10 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
             val releaseAbis = abiSetting("build.releaseAbi")
             android.buildTypes {
                 getByName("debug") {
+                    if (System.getenv("MAH_CI_DEBUG_SIGNING") == "true") {
+                        require(keystorePath.isNotEmpty()) { "MAH CI Debug signing requires KEYSTORE_PATH" }
+                        signingConfig = releaseSigning
+                    }
                     ndk {
                         abiFilters += debugAbis
                     }
