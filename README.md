@@ -88,7 +88,7 @@ python scripts/setup_maa_framework.py
 
 ## MAH 分支的版本与发布
 
-MAH 主仓库负责组装 UIApp、MAH 项目和资源，构建 APK 与 Android 项目 ZIP，并把它们发布到 MAH Release。主分支构建、手动构建与标签发布沿用 MAH 的 `android-apk.yml` 和 `install.yml`；当前工作流沿用 Debug APK 构建方式。
+MAH 主仓库负责组装 UIApp、MAH 项目和资源，构建 APK 与 Android 项目 ZIP，并把它们发布到 MAH Release。推送 `v*` 标签时，由 `install.yml` 调用 `android-apk.yml` 构建 APK；普通代码推送不触发 APK 构建，仍可手动运行工作流。当前工作流沿用 Debug APK 构建方式。
 
 UIApp 推送 `v*` 标签只生成 Release 公告，不构建 APK、不上传安装包或项目包，也不拉取 MAH 与 mah_res。UIApp 标签是内部校验版本，不替换 APK 的 MAH 版本或界面显示版本。发布新 UIApp 后，需要由 MAH 主仓库构建并发布包含该代码的 APK，用户才能安装。
 
