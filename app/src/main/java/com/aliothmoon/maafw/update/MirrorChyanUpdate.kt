@@ -120,11 +120,10 @@ internal class MirrorChyanUpdateClient(
         val rid = request.mirrorchyanRid?.trim()?.takeIf(String::isNotBlank)
             ?: return UpdateCheckResult.SourceFailed(source, UpdateCheckFailure.MISSING_CONFIGURATION)
         val currentVersion = UpdateVersion.parse(request.currentVersion)
-            ?: return UpdateCheckResult.SourceFailed(
-                source,
-                UpdateCheckFailure.VERSION_INVALID,
-                detail = uiTextFromFramework(request.currentVersion),
-            )
+        if (currentVersion == null && request.uiappVersion == null) {
+            return UpdateCheckResult.SourceFailed(source, UpdateCheckFailure.VERSION_INVALID,
+                detail = uiTextFromFramework(request.currentVersion))
+        }
         val latest = when (val outcome = latestWithUniversalFallback(rid, request.channel, request.abi, request.currentVersion, cdk = null)) {
             is UpdateSourceOutcome.Failed -> return UpdateCheckResult.SourceFailed(source, outcome.reason, detail = outcome.detail)
             is UpdateSourceOutcome.Ok -> outcome.value
@@ -135,7 +134,9 @@ internal class MirrorChyanUpdateClient(
                 UpdateCheckFailure.VERSION_INVALID,
                 detail = uiTextFromFramework(latest.version),
             )
-        if (latestVersion <= currentVersion) {
+        val current = if (request.uiappVersion != null) latest.version == request.currentVersion
+            else latestVersion <= requireNotNull(currentVersion)
+        if (current) {
             UpdateCheckResult.UpToDate(source, latest.version)
         } else {
             UpdateCheckResult.UpdateAvailable(source, UpdateInfo(version = latest.version, releaseNotes = latest.releaseNote))

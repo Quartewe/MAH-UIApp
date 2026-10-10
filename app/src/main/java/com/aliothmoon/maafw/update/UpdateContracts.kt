@@ -95,6 +95,8 @@ data class UpdateCheckRequest(
     val channel: UpdateChannel = UpdateChannel.STABLE,
     val mirrorchyanRid: String? = null,
     val githubRepository: String? = null,
+    /** MAH only: compare the announcement tag before looking up a main-repository APK. */
+    val uiappVersion: String? = null,
 )
 
 /** 检查产物：只回答「有没有新版本」，下载端点由 [UpdateSourceClient.resolve] 在下载时解析 */
@@ -133,6 +135,7 @@ data class UpdateResolveRequest(
     val mirrorchyanRid: String? = null,
     val mirrorchyanCdk: String? = null,
     val githubRepository: String? = null,
+    val useLatestRelease: Boolean = false,
 )
 
 /** 解析产物：下载端点与校验值 */

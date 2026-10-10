@@ -21,6 +21,7 @@ val updateModule = module {
     single { GitHubUpdateClient(get()) }
     single {
         UpdateService(
+            githubApi = get(),
             clients = listOf(
                 get<MirrorChyanUpdateClient>(),
                 get<GitHubUpdateClient>(),

@@ -21,6 +21,26 @@ class ProjectUpdateManagerTest {
     @get:Rule val temporary = TemporaryFolder()
 
     @Test
+    fun `project follows GitHub latest and beta release order even with a lower version`() = runTest {
+        val stable = release("v2.0.0", "MAH-project-android-v2.0.0.zip")
+        val beta = FakeHttpResponse(200, """[
+            {"tag_name":"v2.0.1-alpha4","prerelease":true,"assets":[{"name":"MAH-project-android-v2.0.1-alpha4.zip","browser_download_url":"https://example.com/beta.zip"}]},
+            {"tag_name":"v9.0.0","assets":[{"name":"MAH-project-android-v9.0.0.zip","browser_download_url":"https://example.com/older-release.zip"}]}
+        ]""")
+        val gateway = RecordingHttpClientHelper(stable, beta)
+        val manager = manager(gateway, projectVersion = "v10.0.0")
+        assertTrue(manager.check(ProjectPackageTarget.Project, UpdateChannel.STABLE))
+        assertEquals("v2.0.0", manager.state.value.entries[ProjectPackageTarget.Project]?.candidate?.update?.version)
+        assertTrue(gateway.requests.first().first.endsWith("/releases/latest"))
+        assertTrue(manager.check(ProjectPackageTarget.Project, UpdateChannel.BETA))
+        assertEquals("v2.0.1-alpha4", manager.state.value.entries[ProjectPackageTarget.Project]?.candidate?.update?.version)
+        val same = manager(RecordingHttpClientHelper(beta), projectVersion = "v2.0.1-alpha4")
+        assertFalse(same.check(ProjectPackageTarget.Project, UpdateChannel.BETA))
+        val unversioned = manager(RecordingHttpClientHelper(stable), projectVersion = "local-test")
+        assertTrue(unversioned.check(ProjectPackageTarget.Project))
+    }
+
+    @Test
     fun `resource candidate survives a later manual project check and can be installed separately`() = runTest {
         val gateway = RecordingHttpClientHelper(
             release("resource-new", "mah_res-full-resource-new.zip"),
@@ -107,10 +127,11 @@ class ProjectUpdateManagerTest {
     private fun manager(
         gateway: RecordingHttpClientHelper,
         downloader: OkHttpUpdateDownloader = mockk(),
+        projectVersion: String = "v1.0.0",
     ): ProjectUpdateManager {
         val root = temporary.newFolder()
         root.resolve(ProjectPackageInstaller.STATE).writeText(
-            """{"projectVersion":"v1.0.0","resourceVersion":"resource-old"}""",
+            """{"projectVersion":"$projectVersion","resourceVersion":"resource-old"}""",
         )
         val definition = ProjectDefinition(
             name = "test", version = "v1.0.0", resources = emptyList(), tasks = emptyList(),
@@ -124,7 +145,8 @@ class ProjectUpdateManagerTest {
         )
     }
 
-    private fun release(version: String, name: String) = FakeHttpResponse(200,
-        """[{"tag_name":"$version","assets":[{"name":"$name","browser_download_url":"https://example.com/$name"}]}]""",
-    )
+    private fun release(version: String, name: String): FakeHttpResponse {
+        val body = """{"tag_name":"$version","assets":[{"name":"$name","browser_download_url":"https://example.com/$name"}]}"""
+        return FakeHttpResponse(200, if (name.startsWith("MAH-project")) body else "[$body]")
+    }
 }

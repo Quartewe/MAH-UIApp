@@ -47,7 +47,11 @@ class ProjectUpdateManager internal constructor(
         mutable.update { it.copy(versions = versions, enabled = metadata.resourceRepository != null) }
     }
 
-    suspend fun check(target: ProjectPackageTarget): Boolean = gate.withLock {
+    internal fun clear(target: ProjectPackageTarget) {
+        mutable.update { it.copy(entries = it.entries - target) }
+    }
+
+    suspend fun check(target: ProjectPackageTarget, channel: UpdateChannel = UpdateChannel.STABLE): Boolean = gate.withLock {
         mutable.update { it.copy(activeTarget = target, progress = null, entries = it.entries - target) }
         try {
             refresh()
@@ -56,7 +60,13 @@ class ProjectUpdateManager internal constructor(
             // Generic PI projects may not configure these independent update channels.
             if (repo.isNullOrBlank()) return@withLock false
             requireNotNull(api.parseRepository(repo)) { "Invalid update repository" }
-            val releases = when (val result = api.releases(repo)) {
+            val releaseResult = if (target == ProjectPackageTarget.Resource) api.releases(repo) else {
+                when (val latest = api.latestRelease(repo, channel)) {
+                    is UpdateSourceOutcome.Ok -> UpdateSourceOutcome.Ok(listOf(latest.value))
+                    is UpdateSourceOutcome.Failed -> latest
+                }
+            }
+            val releases = when (val result = releaseResult) {
                 is UpdateSourceOutcome.Ok -> result.value
                 is UpdateSourceOutcome.Failed -> {
                     setResult(target, ProjectUpdateEntry(message = result.detail ?: result.reason.message))
@@ -73,16 +83,15 @@ class ProjectUpdateManager internal constructor(
                 })
                 return@withLock plan?.available == true
             }
-            // Resource tags are activity names, not semver. Keep the existing stable-only policy.
-            val selection = releases.asSequence().filterNot { it.prerelease }.mapNotNull { release ->
+            val current = mutable.value.versions.projectVersion
+            val selection = releases.firstOrNull()?.let { release ->
                 selectProjectAsset(release.assets, target)?.let { release to it }
-            }.firstOrNull()
+            }
             if (selection == null) {
                 setResult(target, ProjectUpdateEntry(message = uiTextOf(R.string.mah_update_no_package)))
                 return@withLock false
             }
             val (release, asset) = selection
-            val current = if (target == ProjectPackageTarget.Resource) mutable.value.versions.resourceVersion else mutable.value.versions.projectVersion
             setResult(target, if (release.tag == current) {
                 ProjectUpdateEntry(message = uiTextOf(R.string.mah_update_current))
             } else {

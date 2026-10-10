@@ -1,13 +1,15 @@
 package com.aliothmoon.maafw.update
 
 import timber.log.Timber
+import kotlinx.coroutines.CancellationException
 
 /**
- * 更新源分发：检查与下载地址解析都只打指定的单一源，不兜底、不交叉核对，
- * 源失败原样返回，由文案引导用户自己切源
+ * MAH 先比较 UIApp 公告的内部版本，再按选定来源检查主仓库 APK。
+ * 其他项目直接使用选定来源；下载地址始终由选定来源解析。
  */
-class UpdateService(
+class UpdateService internal constructor(
     clients: Collection<UpdateSourceClient>,
+    private val githubApi: GitHubReleasesApi? = null,
 ) {
 
     private val clientsBySource = clients.associateBy(UpdateSourceClient::source)
@@ -18,6 +20,22 @@ class UpdateService(
             "source=%s currentVersion=%s channel=%s",
             source, request.currentVersion, request.channel,
         )
+        if (request.uiappVersion != null) {
+            val announcement = try {
+                requireNotNull(githubApi).latestRelease("Quartewe/MAH-UIApp", request.channel)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.tag("UpdateCheck").w(e, "UIApp release check failed")
+                return UpdateCheckResult.SourceFailed(source, UpdateCheckFailure.NETWORK)
+            }
+            when (announcement) {
+                is UpdateSourceOutcome.Failed -> return UpdateCheckResult.SourceFailed(source, announcement.reason, announcement.detail)
+                is UpdateSourceOutcome.Ok -> if (announcement.value.tag == request.uiappVersion) {
+                    return UpdateCheckResult.UpToDate(source, request.currentVersion)
+                }
+            }
+        }
         return clientsBySource.getValue(source).check(request)
     }
 

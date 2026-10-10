@@ -77,6 +77,29 @@ internal class GitHubReleasesApi(
         return UpdateSourceOutcome.Ok(releases)
     }
 
+    /** MAH release identity: stable uses GitHub Latest; beta follows release order. */
+    suspend fun latestRelease(repository: String, channel: UpdateChannel): UpdateSourceOutcome<Release> {
+        if (channel == UpdateChannel.BETA) {
+            return when (val outcome = releases(repository)) {
+                is UpdateSourceOutcome.Failed -> outcome
+                is UpdateSourceOutcome.Ok -> outcome.value.firstOrNull {
+                    UpdateVersion.parse(it.tag)?.allowedFor(channel) == true
+                }?.let { UpdateSourceOutcome.Ok(it) }
+                    ?: UpdateSourceOutcome.Failed(UpdateCheckFailure.NO_MATCHING_ASSET)
+            }
+        }
+        val response = helper.get("${buildApiUrl(repository)}/latest", emptyMap(), API_HEADERS)
+        val status = response.code
+        val body = response.readBody()
+        if (!status.isSuccess()) return UpdateSourceOutcome.Failed(apiFailureReason(status))
+        val latest = parseJsonObject(body)?.let(::release)
+            ?: return UpdateSourceOutcome.Failed(UpdateCheckFailure.INVALID_RESPONSE)
+        if (latest.prerelease || UpdateVersion.parse(latest.tag)?.allowedFor(channel) != true) {
+            return UpdateSourceOutcome.Failed(UpdateCheckFailure.NO_MATCHING_ASSET)
+        }
+        return UpdateSourceOutcome.Ok(latest)
+    }
+
     /** 渠道过滤 + 版本解析 + 本机能装的安装包（发版时安装包晚于 release 公开）；无一条合格返回 null */
     fun latestEligible(releases: List<Release>, channel: UpdateChannel, abi: AndroidAbi): Eligible? =
         releases
@@ -111,6 +134,7 @@ internal class GitHubReleasesApi(
     }
 
     private fun release(raw: JsonObject): Release? {
+        if (raw.boolean("draft") == true) return null
         val tag = raw.string("tag_name") ?: return null
         return Release(
             tag = tag,
@@ -187,6 +211,21 @@ internal class GitHubUpdateClient(
     override val source: UpdateSource = UpdateSource.GITHUB
 
     override suspend fun check(request: UpdateCheckRequest): UpdateCheckResult = try {
+        if (request.uiappVersion != null) {
+            val repository = api.parseRepository(request.githubRepository)
+                ?: return UpdateCheckResult.SourceFailed(source, UpdateCheckFailure.MISSING_CONFIGURATION)
+            val release = when (val outcome = api.latestRelease(repository, request.channel)) {
+                is UpdateSourceOutcome.Failed -> return UpdateCheckResult.SourceFailed(source, outcome.reason, outcome.detail)
+                is UpdateSourceOutcome.Ok -> outcome.value
+            }
+            if (api.selectAsset(release.assets, request.abi) == null) {
+                return UpdateCheckResult.SourceFailed(source, UpdateCheckFailure.NO_MATCHING_ASSET)
+            }
+            return if (release.tag == request.currentVersion) {
+                UpdateCheckResult.UpToDate(source, release.tag)
+            } else UpdateCheckResult.UpdateAvailable(source,
+                UpdateInfo(release.tag, release.htmlUrl, release.body))
+        }
         val currentVersion = UpdateVersion.parse(request.currentVersion)
             ?: return UpdateCheckResult.SourceFailed(
                 source,
@@ -223,6 +262,17 @@ internal class GitHubUpdateClient(
     }
 
     override suspend fun resolve(request: UpdateResolveRequest): UpdateResolveResult = try {
+        if (request.useLatestRelease) {
+            val repository = api.parseRepository(request.githubRepository)
+                ?: return UpdateResolveResult.Failed(source, UpdateCheckFailure.MISSING_CONFIGURATION)
+            val release = when (val outcome = api.latestRelease(repository, request.channel)) {
+                is UpdateSourceOutcome.Failed -> return UpdateResolveResult.Failed(source, outcome.reason, outcome.detail)
+                is UpdateSourceOutcome.Ok -> outcome.value
+            }
+            val asset = api.selectAsset(release.assets, request.abi)
+                ?: return UpdateResolveResult.Failed(source, UpdateCheckFailure.NO_MATCHING_ASSET)
+            return UpdateResolveResult.Resolved(ResolvedUpdate(source, release.tag, asset.downloadUrl, asset.sha256))
+        }
         val repository = api.parseRepository(request.githubRepository)
             ?: return UpdateResolveResult.Failed(source, UpdateCheckFailure.MISSING_CONFIGURATION)
         val releases = when (val outcome = api.releases(repository)) {
