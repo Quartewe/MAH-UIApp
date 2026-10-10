@@ -352,7 +352,7 @@ class RunLogRecorderTest {
 
         recorder.begin(planOf("清体力"), ID)
         runner.emit(RunnerEvent.Log("跑起来了"))
-        runner.emit(RunnerEvent.ExecutionFinished(failed))
+        runner.emit(RunnerEvent.ExecutionFinished)
         recorder.end(ID, RunEndReason.Ran(failed))
 
         val records = sessionRecords()

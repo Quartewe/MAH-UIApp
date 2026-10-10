@@ -65,6 +65,7 @@ internal object MaafwLogRetention {
             .groupBy { it.parentFile }
             .entries
             .sumOf { (dir, files) ->
+                if (dir == null) return@sumOf 0
                 val budget = when {
                     dir == shellRoot -> SHELL_MAX_TOTAL_BYTES
                     piRoot != null && dir.startsWith(piRoot) -> AGENT_MAX_TOTAL_BYTES

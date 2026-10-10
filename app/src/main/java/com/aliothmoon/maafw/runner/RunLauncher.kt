@@ -235,7 +235,6 @@ class RunLauncher(
         // Schedule 自带整条规则的选项，toString 一长串；日志里认得出是哪条就够
         val source = when (trigger) {
             RunTrigger.Manual -> "manual"
-            RunTrigger.Overlay -> "overlay"
             is RunTrigger.Schedule -> "schedule:${trigger.strategyId}"
         }
         return "$source ($config)"
