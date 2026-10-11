@@ -133,6 +133,7 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
         ) {
             UpdateCard(settingsState, onSettingsIntent)
+            CombatFilesCard(state)
             TaskSettingCards(state, onIntent)
             ResourceOptionCard(state, onIntent)
             ControllerOptionCard(state, onIntent)

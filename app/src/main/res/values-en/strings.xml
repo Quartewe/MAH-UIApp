@@ -1,4 +1,16 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="combat_files_title">Combat lists</string>
+    <string name="combat_files_manage">Manage combat JSON files</string>
+    <string name="combat_files_hint">Manage files such as default.json containing team and combat actions. After importing, copy the filename into the task JSON filename option. Duplicate names receive a numeric suffix.</string>
+    <string name="combat_files_import">Import combat list</string>
+    <string name="combat_files_export">Export</string>
+    <string name="combat_files_copy_name">Copy filename</string>
+    <string name="combat_files_copied">Filename copied</string>
+    <string name="combat_files_empty">No combat JSON files yet</string>
+    <string name="combat_files_imported">Imported %1$s. Use this filename in task options.</string>
+    <string name="combat_files_exported">Combat list exported</string>
+    <string name="combat_files_invalid">Choose a combat JSON file no larger than 2 MB containing team and fight objects. The filename must not contain paths or special symbols.</string>
+    <string name="combat_files_failed">File operation failed. Please select the file or save location again.</string>
     <string name="app_name">MaaFwApp</string>
 
     <!-- Common -->

@@ -1,4 +1,16 @@
 <resources>
+    <string name="combat_files_title">作战列表</string>
+    <string name="combat_files_manage">管理作战 JSON 文件</string>
+    <string name="combat_files_hint">管理 default.json 等包含编队与战斗动作的文件。导入后可复制文件名，填入任务的 JSON 文件名选项。同名文件会自动加数字后缀。</string>
+    <string name="combat_files_import">导入作战列表</string>
+    <string name="combat_files_export">导出</string>
+    <string name="combat_files_copy_name">复制文件名</string>
+    <string name="combat_files_copied">文件名已复制</string>
+    <string name="combat_files_empty">暂无作战 JSON 文件</string>
+    <string name="combat_files_imported">已导入 %1$s，可在任务选项中填写此文件名</string>
+    <string name="combat_files_exported">作战列表已导出</string>
+    <string name="combat_files_invalid">请选择不超过 2 MB、包含 team 和 fight 对象的作战 JSON 文件，文件名不能包含路径或特殊符号</string>
+    <string name="combat_files_failed">文件操作失败，请重新选择文件或保存位置</string>
     <string name="app_name">MaaFwApp</string>
 
     <!-- 通用 -->
