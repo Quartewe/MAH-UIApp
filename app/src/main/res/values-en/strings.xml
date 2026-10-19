@@ -779,4 +779,16 @@
     <string name="notification_err_gotify_scheme">Gotify server URL must start with http:// or https://</string>
     <string name="notification_err_webhook_url_empty">Webhook URL is empty</string>
     <string name="notification_err_webhook_body_empty">Webhook body template is empty</string>
+    <string name="config_share_title">Configuration sharing</string>
+    <string name="config_share_hint">Share the active configuration or import a MFW share code or MXU file/share code. Imports append new configurations. Passwords are removed and must be entered again.</string>
+    <string name="config_share_code">Configuration or share code</string>
+    <string name="config_share_generate">Generate code</string>
+    <string name="config_share_open">Open file</string>
+    <string name="config_share_preview">Preview import</string>
+    <string name="config_share_import">Append configurations</string>
+    <string name="config_share_preview_count">Append %1$d configurations with %2$d tasks.</string>
+    <string name="config_share_versions">Resource versions differ or are unknown:\n%1$s</string>
+    <string name="config_share_resource">Resource after import: %1$s</string>
+    <string name="config_share_saved">Share code saved</string>
+    <string name="config_share_stale">Resources changed. Preview the import again.</string>
 </resources>

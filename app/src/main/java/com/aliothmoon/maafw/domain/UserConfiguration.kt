@@ -95,6 +95,8 @@ data class ConfiguredTask(
     val instanceId: String = newTaskInstanceId(),
     /** Per task instance, per source option, per target value. Old flat configurations stay common. */
     val bindings: Map<String, OptionBindingState> = emptyMap(),
+    /** Sanitized MFW tree; preserves branch layout and inactive binding entries on re-export. */
+    val sharedOptions: kotlinx.serialization.json.JsonObject? = null,
 )
 
 @Serializable

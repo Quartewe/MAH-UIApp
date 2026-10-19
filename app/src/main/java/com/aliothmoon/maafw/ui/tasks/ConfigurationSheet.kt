@@ -117,6 +117,7 @@ internal fun ConfigurationSheet(
     onDismiss: () -> Unit,
 ) {
     var page by remember { mutableStateOf<ConfigSheetPage>(ConfigSheetPage.Home) }
+    var showShare by remember { mutableStateOf(false) }
     var homeTab by rememberSaveable { mutableIntStateOf(0) }
     val existingNames = state.configurationList.map { it.name }
 
@@ -150,6 +151,7 @@ internal fun ConfigurationSheet(
                     onOpenCreateEmpty = { page = ConfigSheetPage.CreateEmpty },
                     onOpenTemplate = { page = ConfigSheetPage.TemplatePreview(it) },
                     onClose = onDismiss,
+                    onShare = { showShare = true },
                 )
 
                 is ConfigSheetPage.Rename -> {
@@ -199,6 +201,7 @@ internal fun ConfigurationSheet(
             }
         }
     }
+    if (showShare) ConfigShareDialog(state = state, onDismiss = { showShare = false })
 }
 
 @Composable
@@ -215,9 +218,13 @@ private fun ConfigSheetHomePage(
     onOpenCreateEmpty: () -> Unit,
     onOpenTemplate: (String) -> Unit,
     onClose: () -> Unit,
+    onShare: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md)) {
         MaaSheetHeader(title = stringResource(R.string.config_title), onClose = onClose)
+        androidx.compose.material3.TextButton(onClick = onShare, enabled = !locked) {
+            Text(stringResource(R.string.config_share_title))
+        }
         val tabs = buildList {
             add(0 to stringResource(R.string.config_select))
             if (templates.isNotEmpty()) {

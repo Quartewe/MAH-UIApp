@@ -767,4 +767,16 @@
     <string name="notification_err_gotify_scheme">Gotify 服务器地址要以 http:// 或 https:// 开头</string>
     <string name="notification_err_webhook_url_empty">Webhook 地址未填写</string>
     <string name="notification_err_webhook_body_empty">Webhook 请求体模板未填写</string>
+    <string name="config_share_title">配置分享</string>
+    <string name="config_share_hint">分享当前配置，或导入 MFW 分享码、MXU 配置文件/分享码。导入会新增配置；密码会清空，请重新填写。</string>
+    <string name="config_share_code">配置或分享码</string>
+    <string name="config_share_generate">生成分享码</string>
+    <string name="config_share_open">打开文件</string>
+    <string name="config_share_preview">预览导入</string>
+    <string name="config_share_import">确认新增</string>
+    <string name="config_share_preview_count">将新增 %1$d 个配置，共 %2$d 个任务。</string>
+    <string name="config_share_versions">资源版本不同或未知：\n%1$s</string>
+    <string name="config_share_resource">导入后使用资源：%1$s</string>
+    <string name="config_share_saved">分享码已保存</string>
+    <string name="config_share_stale">资源已更新，请重新预览导入</string>
 </resources>
