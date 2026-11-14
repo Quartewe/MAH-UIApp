@@ -8,7 +8,7 @@ import io.mockk.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.*
 import okhttp3.*
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.*
@@ -56,6 +56,292 @@ class ResourceUpdateServiceTest {
     }
     @After fun cleanup() = unmockkObject(MaaDispatchers, AppPaths)
     private fun baseline() = ProjectPackageInstaller(root).installResources(listOf(fixture.archive("A", "full")))
+
+    private fun assetJson(asset: GitHubReleasesApi.Asset, label: String? = null) = buildJsonObject {
+        put("name", asset.name)
+        put("label", label)
+        put("browser_download_url", asset.downloadUrl)
+        put("digest", asset.sha256)
+    }
+
+    private fun renamedAsset(
+        asset: GitHubReleasesApi.Asset, label: String? = asset.name,
+        name: String = asset.name.removeSuffix(".zip") + "-uploaded.zip",
+    ): JsonObject {
+        val renamed = asset.copy(
+            name = name,
+            downloadUrl = asset.downloadUrl.substringBeforeLast('/') + "/$name",
+        )
+        bodies[renamed.downloadUrl.removePrefix("https://example.com")] =
+            bodies.getValue(asset.downloadUrl.removePrefix("https://example.com"))
+        return assetJson(renamed, label)
+    }
+
+    private fun publishedApi(transform: (GitHubReleasesApi.Asset) -> List<JsonObject>): GitHubReleasesApi {
+        val response = buildJsonArray {
+            releases.forEach { release ->
+                add(buildJsonObject {
+                    put("tag_name", release.tag)
+                    put("assets", buildJsonArray {
+                        release.assets.forEach { asset -> transform(asset).forEach { add(it) } }
+                    })
+                })
+            }
+        }
+        return GitHubReleasesApi(RecordingHttpClientHelper(FakeHttpResponse(200, response.toString())).mock)
+    }
+
+    private suspend fun publishedReleases(transform: (GitHubReleasesApi.Asset) -> List<JsonObject>) =
+        (publishedApi(transform).releases("owner/resources") as UpdateSourceOutcome.Ok).value
+
+    private fun renamePackageDescriptors(version: String, names: Map<String, String>) {
+        val descriptor = fixture.descriptor(version)
+        val metadata = Json.encodeToString(descriptor.copy(packages = descriptor.packages.map {
+            it.copy(name = names[it.manifest.kind] ?: it.name)
+        })).toByteArray()
+        bodies["/$version/mah_res-manifest.json"] = metadata
+        val index = releases.indexOfFirst { it.tag == version }
+        releases[index] = releases[index].copy(assets = releases[index].assets.map {
+            if (it.name == RESOURCE_RELEASE) it.copy(sha256 = "sha256:" + digestBytes(metadata)) else it
+        })
+    }
+
+    @Test fun `first use bootstrap downloads renamed full archive by unicode label`() = runTest(dispatcher) {
+        val full = fixture.description("C", "full")
+        val label = "mah_res-full-新秩序·新天堂#261028.zip"
+        renamePackageDescriptors("C", mapOf("full" to label))
+        val api = publishedApi { asset ->
+            listOf(if (asset.name == full.name) renamedAsset(asset, label) else assetJson(asset))
+        }
+        File(root, ProjectPackageInstaller.STATE).writeText("{}")
+        val pi = File(root, "interface.json")
+        pi.writeText(pi.readText().replace("\"name\":\"test\"", "\"name\":\"test\",\"resource_github\":\"https://github.com/owner/resources\""))
+
+        GitHubResourceBootstrapper(api, downloader).ensure(root, false) { _, _ -> }
+
+        assertEquals("C", ProjectPackageInstaller(root).state().resourceVersion)
+        assertTrue(ProjectPackageInstaller(root).resourcesComplete(true))
+        assertEquals(listOf("/C/mah_res-full-C-uploaded.zip"), requests.filter { it.endsWith(".zip") })
+    }
+
+    @Test fun `renamed full and hotfix archives resolve labels across the delta chain`() = runTest(dispatcher) {
+        baseline()
+        val published = publishedReleases { asset ->
+            listOf(if (asset.name.endsWith(".zip")) renamedAsset(asset) else assetJson(asset))
+        }
+        val plan = service.plan(published, root)!!
+        assertEquals(listOf("B", "C"), plan.deltas.map { it.update.version })
+
+        val prepared = service.prepare(plan, root) { _, _ -> }
+        service.installPrepared(plan, prepared, root) { _, _ -> }
+
+        assertEquals("C", ProjectPackageInstaller(root).state().resourceVersion)
+        assertTrue(ProjectPackageInstaller(root).resourcesComplete(true))
+        assertEquals(listOf("/B/mah_res-hotfix-B-uploaded.zip", "/C/mah_res-hotfix-C-uploaded.zip"),
+            requests.filter { it.endsWith(".zip") })
+    }
+
+    @Test fun `exact name takes priority over matching labels`() = runTest(dispatcher) {
+        val full = releases.first().assets.single { it.name == fixture.description("C", "full").name }
+        val published = publishedReleases { asset ->
+            if (asset == full) listOf(renamedAsset(asset, name = "alias.zip"), renamedAsset(asset, name = "second.zip"), assetJson(asset))
+            else listOf(assetJson(asset))
+        }
+        assertEquals(full.downloadUrl, service.plan(published, root)!!.full.update.downloadUrl)
+    }
+
+    @Test fun `ambiguous full archive labels fail before download`() = runTest(dispatcher) {
+        val full = fixture.description("C", "full")
+        val published = publishedReleases { asset ->
+            if (asset.name == full.name) listOf(renamedAsset(asset), renamedAsset(asset, name = "second.zip"))
+            else listOf(assetJson(asset))
+        }
+        try {
+            service.plan(published, root)
+            fail("A full archive label must identify one asset")
+        } catch (e: IllegalStateException) {
+            assertEquals("Resource asset is missing: ${full.name}", e.message)
+            assertFalse(requests.any { it.endsWith(".zip") })
+        }
+    }
+
+    @Test fun `ambiguous hotfix labels fall back to full archive`() = runTest(dispatcher) {
+        baseline()
+        val hotfix = fixture.description("C", "hotfix")
+        val published = publishedReleases { asset ->
+            if (asset.name == hotfix.name) listOf(renamedAsset(asset), renamedAsset(asset, name = "second.zip"))
+            else listOf(assetJson(asset))
+        }
+        val plan = service.plan(published, root)!!
+        assertTrue(plan.deltas.isEmpty())
+        assertEquals("C", plan.full.update.version)
+    }
+
+    @Test fun `matching name digest failure does not fall back to a label`() = runTest(dispatcher) {
+        val full = fixture.description("C", "full")
+        val published = publishedReleases { asset ->
+            if (asset.name == full.name) listOf(renamedAsset(asset, name = "alias.zip"), assetJson(asset.copy(sha256 = "sha256:" + "0".repeat(64))))
+            else listOf(assetJson(asset))
+        }
+        try {
+            service.plan(published, root)
+            fail("The name-matched asset must pass digest verification")
+        } catch (e: IllegalArgumentException) {
+            assertEquals("Resource asset digest differs from descriptor", e.message)
+        }
+    }
+
+    @Test fun `label matched archive must pass descriptor digest verification`() = runTest(dispatcher) {
+        val full = fixture.description("C", "full")
+        val published = publishedReleases { asset ->
+            listOf(if (asset.name == full.name) renamedAsset(asset.copy(sha256 = "sha256:" + "0".repeat(64))) else assetJson(asset))
+        }
+        try {
+            service.plan(published, root)
+            fail("The label-matched asset must pass digest verification")
+        } catch (e: IllegalArgumentException) {
+            assertEquals("Resource asset digest differs from descriptor", e.message)
+        }
+    }
+
+    @Test fun `missing empty or different labels do not match a renamed archive`() = runTest(dispatcher) {
+        val full = fixture.description("C", "full")
+        for (label in listOf(null, "", "other.zip")) {
+            val published = publishedReleases { asset ->
+                listOf(if (asset.name == full.name) renamedAsset(asset, label) else assetJson(asset))
+            }
+            try {
+                service.plan(published, root)
+                fail("A missing name requires an exact matching label")
+            } catch (e: IllegalStateException) {
+                assertEquals("Resource asset is missing: ${full.name}", e.message)
+            }
+        }
+    }
+
+    @Test fun `full archive falls back to the last six digits with the matching package kind`() = runTest(dispatcher) {
+        renamePackageDescriptors("C", mapOf("full" to "mah_res-full-新秩序·新天堂#261028.zip"))
+        val full = fixture.description("C", "full").name
+        val hotfix = fixture.description("C", "hotfix").name
+        val published = publishedReleases { asset ->
+            listOf(when (asset.name) {
+                full -> renamedAsset(asset, label = null, name = "mah_res-full-.261028.zip")
+                hotfix -> renamedAsset(asset, label = null, name = "mah_res-hotfix-.261028.zip")
+                else -> assetJson(asset)
+            })
+        }
+        val plan = service.plan(published, root)!!
+        val prepared = service.prepare(plan, root) { _, _ -> }
+        service.installPrepared(plan, prepared, root) { _, _ -> }
+
+        assertEquals("C", ProjectPackageInstaller(root).state().resourceVersion)
+        assertTrue(ProjectPackageInstaller(root).resourcesComplete(true))
+        assertEquals(listOf("/C/mah_res-full-.261028.zip"), requests.filter { it.endsWith(".zip") })
+    }
+
+    @Test fun `last six digit fallback resolves a complete hotfix chain`() = runTest(dispatcher) {
+        baseline()
+        val suffixes = mapOf("B" to "261027", "C" to "261028")
+        suffixes.forEach { (version, suffix) ->
+            renamePackageDescriptors(version, listOf("full", "hotfix").associateWith {
+                "mah_res-$it-资源#$suffix.zip"
+            })
+        }
+        val published = publishedReleases { asset ->
+            val version = asset.downloadUrl.substringAfter("https://example.com/").substringBefore('/')
+            val suffix = suffixes[version]
+            listOf(if (suffix != null && asset.name.endsWith(".zip")) {
+                val kind = if (asset.name.startsWith("mah_res-hotfix-")) "hotfix" else "full"
+                renamedAsset(asset, label = null, name = "mah_res-$kind-.20$suffix.zip")
+            } else assetJson(asset))
+        }
+        val plan = service.plan(published, root)!!
+        assertEquals(listOf("B", "C"), plan.deltas.map { it.update.version })
+        val prepared = service.prepare(plan, root) { _, _ -> }
+        service.installPrepared(plan, prepared, root) { _, _ -> }
+
+        assertTrue(ProjectPackageInstaller(root).resourcesComplete(true))
+        assertEquals("C", ProjectPackageInstaller(root).state().resourceVersion)
+        assertEquals(listOf("/B/mah_res-hotfix-.20261027.zip", "/C/mah_res-hotfix-.20261028.zip"),
+            requests.filter { it.endsWith(".zip") })
+    }
+
+    @Test fun `exact name and label take priority over numeric suffix candidates`() = runTest(dispatcher) {
+        baseline()
+        val hotfix = fixture.description("C", "hotfix").name
+        val expected = "mah_res-hotfix-261028.zip"
+        renamePackageDescriptors("C", mapOf("hotfix" to expected))
+        for (byLabel in listOf(false, true)) {
+            val selectedName = if (byLabel) "mah_res-hotfix-published-261028.zip" else expected
+            val published = publishedReleases { asset ->
+                if (asset.name == hotfix) listOf(
+                    renamedAsset(asset, label = null, name = "mah_res-hotfix-backup-261028.zip"),
+                    renamedAsset(asset, label = if (byLabel) expected else null, name = selectedName),
+                ) else listOf(assetJson(asset))
+            }
+            val plan = service.plan(published, root)!!
+            assertEquals(listOf("B", "C"), plan.deltas.map { it.update.version })
+            assertEquals("https://example.com/C/$selectedName", plan.deltas.last().update.downloadUrl)
+        }
+    }
+
+    @Test fun `ambiguous hotfix labels or numeric suffixes fall back to full`() = runTest(dispatcher) {
+        baseline()
+        val hotfix = fixture.description("C", "hotfix").name
+        val expected = "mah_res-hotfix-资源#261028.zip"
+        renamePackageDescriptors("C", mapOf("hotfix" to expected))
+        for (byLabel in listOf(false, true)) {
+            val label = if (byLabel) expected else null
+            val secondName = if (byLabel) "mah_res-hotfix-other.zip" else "mah_res-hotfix-backup-261028.zip"
+            val published = publishedReleases { asset ->
+                if (asset.name == hotfix) listOf(
+                    renamedAsset(asset, label = label, name = "mah_res-hotfix-.261028.zip"),
+                    renamedAsset(asset, label = label, name = secondName),
+                ) else listOf(assetJson(asset))
+            }
+            val plan = service.plan(published, root)!!
+            assertTrue(plan.deltas.isEmpty())
+            assertEquals("C", plan.full.update.version)
+        }
+    }
+
+    @Test fun `numeric suffix must be trailing and have six matching digits of the same kind`() = runTest(dispatcher) {
+        val full = fixture.description("C", "full").name
+        val hotfix = fixture.description("C", "hotfix").name
+        val expected = "mah_res-full-资源#261028.zip"
+        renamePackageDescriptors("C", mapOf("full" to expected))
+        for (name in listOf("mah_res-full-.261027.zip", "mah_res-full-.61028.zip", "mah_res-full-261028-backup.zip")) {
+            val published = publishedReleases { asset ->
+                listOf(when (asset.name) {
+                    full -> renamedAsset(asset, label = null, name = name)
+                    hotfix -> renamedAsset(asset, label = null, name = "mah_res-hotfix-.261028.zip")
+                    else -> assetJson(asset)
+                })
+            }
+            try {
+                service.plan(published, root)
+                fail("The full archive must have a matching six digit suffix")
+            } catch (e: IllegalStateException) {
+                assertEquals("Resource asset is missing: $expected", e.message)
+            }
+        }
+    }
+
+    @Test fun `numeric suffix match must pass descriptor digest verification`() = runTest(dispatcher) {
+        val full = fixture.description("C", "full").name
+        renamePackageDescriptors("C", mapOf("full" to "mah_res-full-资源#261028.zip"))
+        val published = publishedReleases { asset ->
+            listOf(if (asset.name == full) {
+                renamedAsset(asset.copy(sha256 = "sha256:" + "0".repeat(64)), label = null, name = "mah_res-full-.261028.zip")
+            } else assetJson(asset))
+        }
+        try {
+            service.plan(published, root)
+            fail("The suffix-matched archive must pass digest verification")
+        } catch (e: IllegalArgumentException) {
+            assertEquals("Resource asset digest differs from descriptor", e.message)
+        }
+    }
 
     @Test fun `cross version update downloads only the required deltas`() = runTest(dispatcher) {
         baseline()

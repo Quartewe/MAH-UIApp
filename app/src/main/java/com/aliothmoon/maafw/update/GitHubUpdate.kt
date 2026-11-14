@@ -40,6 +40,7 @@ internal class GitHubReleasesApi(
         val name: String,
         val downloadUrl: String,
         val sha256: String?,
+        val label: String? = null,
     ) {
         val isApk: Boolean get() = name.isApkUrl() || downloadUrl.isApkUrl()
     }
@@ -157,6 +158,7 @@ internal class GitHubReleasesApi(
             name = raw.string("name") ?: downloadUrl.substringAfterLast('/'),
             downloadUrl = downloadUrl,
             sha256 = raw.string("digest")?.trim()?.takeIf(DIGEST_PATTERN::matches),
+            label = raw.string("label"),
         )
     }
 

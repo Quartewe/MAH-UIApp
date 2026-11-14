@@ -9,6 +9,21 @@ import java.io.File
 internal data class ResourceDownload(val update: ResolvedUpdate, val description: ResourcePackageDescription? = null)
 internal data class ResourceUpdatePlan(val full: ResourceDownload, val deltas: List<ResourceDownload> = emptyList(), val available: Boolean = true)
 
+private val RESOURCE_ASSET_SUFFIX = Regex("""mah_res-(full|hotfix)-.*([0-9]{6})\.zip""")
+
+private fun resourceAssetSuffix(name: String): Pair<String, String>? =
+    RESOURCE_ASSET_SUFFIX.matchEntire(name)?.let { it.groupValues[1] to it.groupValues[2] }
+
+private fun findResourceAsset(assets: List<GitHubReleasesApi.Asset>, name: String): GitHubReleasesApi.Asset? {
+    val named = assets.filter { it.name == name }
+    if (named.isNotEmpty()) return named.singleOrNull()
+    // A published label can retain the original filename after GitHub renames the upload.
+    val labelled = assets.filter { it.label == name }
+    if (labelled.isNotEmpty()) return labelled.singleOrNull()
+    val suffix = resourceAssetSuffix(name) ?: return null
+    return assets.singleOrNull { resourceAssetSuffix(it.name) == suffix }
+}
+
 /** Shares the resource protocol between first-use preparation and manual/startup updates. */
 internal class ResourceUpdateService(private val downloader: OkHttpUpdateDownloader) {
     suspend fun plan(
@@ -34,7 +49,7 @@ internal class ResourceUpdateService(private val downloader: OkHttpUpdateDownloa
             }
         }
         fun asset(release: GitHubReleasesApi.Release, desc: ResourcePackageDescription): ResourceDownload {
-            val found = release.assets.singleOrNull { it.name == desc.name } ?: error("Resource asset is missing: ${desc.name}")
+            val found = findResourceAsset(release.assets, desc.name) ?: error("Resource asset is missing: ${desc.name}")
             require(found.sha256 == null || found.sha256.removePrefix("sha256:") == desc.sha256) { "Resource asset digest differs from descriptor" }
             return ResourceDownload(ResolvedUpdate(UpdateSource.GITHUB, release.tag, found.downloadUrl, desc.sha256, "zip"), desc)
         }
@@ -57,7 +72,7 @@ internal class ResourceUpdateService(private val downloader: OkHttpUpdateDownloa
         var desc: ResourceReleaseDescription = targetDescription
         while (reversed.size < 32 && seen.add(desc.version to desc.contentId)) {
             val delta = desc.packages.singleOrNull { it.manifest.kind == "hotfix" } ?: break
-            if (release.assets.count { it.name == delta.name } != 1) break
+            if (findResourceAsset(release.assets, delta.name) == null) break
             reversed += asset(release, delta)
             val manifest = delta.manifest
             if (manifest.baseVersion == state.resourceVersion && manifest.baseContentId == currentId) {
